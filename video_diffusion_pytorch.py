@@ -8,9 +8,7 @@ from functools import partial
 from torch.utils import data
 from pathlib import Path
 from torch.optim import Adam
-from torchvision import transforms as T, utils
 from torch.cuda.amp import autocast, GradScaler
-from PIL import Image
 
 from tqdm import tqdm
 from einops import rearrange
@@ -19,6 +17,8 @@ from einops_exts import check_shape, rearrange_many
 from rotary_embedding_torch import RotaryEmbedding
 
 from text import tokenize, bert_embed, BERT_MODEL_DIM
+
+PR_MAX = 8.7731
 
 # helpers functions
 
@@ -348,7 +348,6 @@ class Unet3D(nn.Module):
         cond_dim = None,
         out_dim = None,
         dim_mults=(1, 2, 4, 8),
-        channels = 3,
         attn_heads = 8,
         attn_dim_head = 32,
         use_bert_text_cond = False,
@@ -359,7 +358,6 @@ class Unet3D(nn.Module):
         resnet_groups = 8
     ):
         super().__init__()
-        self.channels = channels
 
         # temporal attention and its relative positional encoding
 
@@ -375,7 +373,7 @@ class Unet3D(nn.Module):
         assert is_odd(init_kernel_size)
 
         init_padding = init_kernel_size // 2
-        self.init_conv = nn.Conv3d(channels, init_dim, (1, init_kernel_size, init_kernel_size), padding = (0, init_padding, init_padding))
+        self.init_conv = nn.Conv3d(1, init_dim, (1, init_kernel_size, init_kernel_size), padding = (0, init_padding, init_padding))
 
         self.init_temporal_attn = Residual(PreNorm(init_dim, temporal_attn(init_dim)))
 
@@ -449,10 +447,9 @@ class Unet3D(nn.Module):
                 Upsample(dim_in) if not is_last else nn.Identity()
             ]))
 
-        out_dim = default(out_dim, channels)
         self.final_conv = nn.Sequential(
             block_klass(dim * 2, dim),
-            nn.Conv3d(dim, out_dim, 1)
+            nn.Conv3d(dim, 1, 1)
         )
 
     def forward_with_cond_scale(
@@ -553,14 +550,12 @@ class GaussianDiffusion(nn.Module):
         image_size,
         num_frames,
         text_use_bert_cls = False,
-        channels = 3,
         timesteps = 1000,
         loss_type = 'l1',
         use_dynamic_thres = False, # from the Imagen paper
         dynamic_thres_percentile = 0.9
     ):
         super().__init__()
-        self.channels = channels
         self.image_size = image_size
         self.num_frames = num_frames
         self.denoise_fn = denoise_fn
@@ -686,9 +681,8 @@ class GaussianDiffusion(nn.Module):
 
         batch_size = cond.shape[0] if exists(cond) else batch_size
         image_size = self.image_size
-        channels = self.channels
         num_frames = self.num_frames
-        return self.p_sample_loop((batch_size, channels, num_frames, image_size, image_size), cond = cond, cond_scale = cond_scale)
+        return self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size), cond = cond, cond_scale = cond_scale)
 
     @torch.inference_mode()
     def interpolate(self, x1, x2, t = None, lam = 0.5):
@@ -737,100 +731,33 @@ class GaussianDiffusion(nn.Module):
 
     def forward(self, x, *args, **kwargs):
         b, device, img_size, = x.shape[0], x.device, self.image_size
-        check_shape(x, 'b c f h w', c = self.channels, f = self.num_frames, h = img_size, w = img_size)
+        check_shape(x, 'b c f h w', c = 1, f = self.num_frames, h = img_size, w = img_size)
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
         x = normalize_img(x)
         return self.p_losses(x, t, *args, **kwargs)
-
-# trainer class
-
-CHANNELS_TO_MODE = {
-    1 : 'L',
-    3 : 'RGB',
-    4 : 'RGBA'
-}
-
-def seek_all_images(img, channels = 3):
-    assert channels in CHANNELS_TO_MODE, f'channels {channels} invalid'
-    mode = CHANNELS_TO_MODE[channels]
-
-    i = 0
-    while True:
-        try:
-            img.seek(i)
-            yield img.convert(mode)
-        except EOFError:
-            break
-        i += 1
-
-# tensor of shape (channels, frames, height, width) -> gif
-
-def video_tensor_to_gif(tensor, path, duration = 120, loop = 0, optimize = True):
-    images = map(T.ToPILImage(), tensor.unbind(dim = 1))
-    first_img, *rest_imgs = images
-    first_img.save(path, save_all = True, append_images = rest_imgs, duration = duration, loop = loop, optimize = optimize)
-    return images
-
-# gif -> (channels, frame, height, width) tensor
-
-def gif_to_tensor(path, channels = 3, transform = T.ToTensor()):
-    img = Image.open(path)
-    tensors = tuple(map(transform, seek_all_images(img, channels = channels)))
-    return torch.stack(tensors, dim = 1)
 
 def identity(t, *args, **kwargs):
     return t
 
 def normalize_img(t):
-    return t * 2 - 1
+    return t * (2 / PR_MAX) - 1
 
 def unnormalize_img(t):
-    return (t + 1) * 0.5
-
-def cast_num_frames(t, *, frames):
-    f = t.shape[1]
-
-    if f == frames:
-        return t
-
-    if f > frames:
-        return t[:, :frames]
-
-    return F.pad(t, (0, 0, 0, 0, 0, frames - f))
+    return (t + 1) * (PR_MAX / 2)
 
 class Dataset(data.Dataset):
     def __init__(
         self,
-        folder,
-        image_size,
-        channels = 3,
-        num_frames = 16,
-        horizontal_flip = False,
-        force_num_frames = True,
-        exts = ['gif']
+        train_path,
     ):
         super().__init__()
-        self.folder = folder
-        self.image_size = image_size
-        self.channels = channels
-        self.paths = [p for ext in exts for p in Path(f'{folder}').glob(f'**/*.{ext}')]
-
-        self.cast_num_frames_fn = partial(cast_num_frames, frames = num_frames) if force_num_frames else identity
-
-        self.transform = T.Compose([
-            T.Resize(image_size),
-            T.RandomHorizontalFlip() if horizontal_flip else T.Lambda(identity),
-            T.CenterCrop(image_size),
-            T.ToTensor()
-        ])
+        self.tensor = torch.load(train_path)
 
     def __len__(self):
-        return len(self.paths)
+        return self.tensor.shape[0]
 
     def __getitem__(self, index):
-        path = self.paths[index]
-        tensor = gif_to_tensor(path, self.channels, transform = self.transform)
-        return self.cast_num_frames_fn(tensor)
+        return self.tensor[index]
 
 # trainer class
 
@@ -838,10 +765,9 @@ class Trainer(object):
     def __init__(
         self,
         diffusion_model,
-        folder,
+        train_path,
         *,
         ema_decay = 0.995,
-        num_frames = 16,
         train_batch_size = 32,
         train_lr = 1e-4,
         train_num_steps = 100000,
@@ -851,7 +777,7 @@ class Trainer(object):
         update_ema_every = 10,
         save_and_sample_every = 1000,
         results_folder = './results',
-        num_sample_rows = 1,
+        num_sample_rows = 2,
         max_grad_norm = None
     ):
         super().__init__()
@@ -864,17 +790,12 @@ class Trainer(object):
         self.save_and_sample_every = save_and_sample_every
 
         self.batch_size = train_batch_size
-        self.image_size = diffusion_model.image_size
         self.gradient_accumulate_every = gradient_accumulate_every
         self.train_num_steps = train_num_steps
 
-        image_size = diffusion_model.image_size
-        channels = diffusion_model.channels
-        num_frames = diffusion_model.num_frames
+        self.ds = Dataset(train_path)
 
-        self.ds = Dataset(folder, image_size, channels = channels, num_frames = num_frames)
-
-        print(f'found {len(self.ds)} videos as gif files at {folder}')
+        print(f'found {len(self.ds)} videos as tensors in {train_path}')
         assert len(self.ds) > 0, 'need to have at least 1 video to start training (although 1 is not great, try 100k)'
 
         self.dl = cycle(data.DataLoader(self.ds, batch_size = train_batch_size, shuffle=True, pin_memory=True))
@@ -968,12 +889,11 @@ class Trainer(object):
 
                 all_videos_list = list(map(lambda n: self.ema_model.sample(batch_size=n), batches))
                 all_videos_list = torch.cat(all_videos_list, dim = 0)
-
-                all_videos_list = F.pad(all_videos_list, (2, 2, 2, 2))
-
-                one_gif = rearrange(all_videos_list, '(i j) c f h w -> c f (i h) (j w)', i = self.num_sample_rows)
-                video_path = str(self.results_folder / str(f'{milestone}.gif'))
-                video_tensor_to_gif(one_gif, video_path)
+                all_videos_list = torch.square(all_videos_list) # Temporary: should be moved to sample function
+                
+                video_path = str(self.results_folder / str(f'{milestone}.pt'))
+                torch.save(all_videos_list, video_path)
+                
                 log = {**log, 'sample': video_path}
                 self.save(milestone)
 
