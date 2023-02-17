@@ -2,11 +2,12 @@
 
 #SBATCH --job-name climate
 #SBATCH --nodes 1
-#SBATCH --gres gpu:1
+#SBATCH --gres gpu:A100:1
 #SBATCH --mem 22G
-#SBATCH --partition gpu_short
+#SBATCH --partition cnu
 #SBATCH --account COSC020762
 #SBATCH --output slurm.out
+#SBATCH --exclude bp1-gpu031,bp1-gpu032
 
 echo Running on host `hostname`
 echo Time is `date`

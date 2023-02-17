@@ -18,7 +18,8 @@ from rotary_embedding_torch import RotaryEmbedding
 
 from text import tokenize, bert_embed, BERT_MODEL_DIM
 
-PR_MAX = 8.7731
+PR_MAX = 8.773123741149902
+PR_MIN = 0
 
 # helpers functions
 
@@ -740,10 +741,10 @@ def identity(t, *args, **kwargs):
     return t
 
 def normalize_img(t):
-    return t * (2 / PR_MAX) - 1
+    return 2 * ((t - PR_MIN) / (PR_MAX - PR_MIN)) - 1
 
 def unnormalize_img(t):
-    return (t + 1) * (PR_MAX / 2)
+    return (t + 1) / 2 * (PR_MAX - PR_MIN) + PR_MIN
 
 class Dataset(data.Dataset):
     def __init__(
@@ -776,8 +777,8 @@ class Trainer(object):
         step_start_ema = 2000,
         update_ema_every = 10,
         save_and_sample_every = 1000,
-        results_folder = './results',
-        num_sample_rows = 2,
+        results_folder = '/results',
+        num_sample_rows = 4,
         max_grad_norm = None
     ):
         super().__init__()
