@@ -16,8 +16,6 @@ from einops_exts import check_shape, rearrange_many
 
 from rotary_embedding_torch import RotaryEmbedding
 
-from text import tokenize, bert_embed, BERT_MODEL_DIM
-
 PR_MAX = 8.773123741149902
 PR_MIN = 0
 
@@ -25,12 +23,6 @@ PR_MIN = 0
 
 def exists(x):
     return x is not None
-
-def noop(*args, **kwargs):
-    pass
-
-def is_odd(n):
-    return (n % 2) == 1
 
 def default(val, d):
     if exists(val):
@@ -346,16 +338,11 @@ class Unet3D(nn.Module):
     def __init__(
         self,
         dim,
-        cond_dim = None,
-        out_dim = None,
         dim_mults=(1, 2, 4, 8),
         attn_heads = 8,
         attn_dim_head = 32,
-        use_bert_text_cond = False,
         init_dim = None,
         init_kernel_size = 7,
-        use_sparse_linear_attn = True,
-        block_type = 'resnet',
         resnet_groups = 8
     ):
         super().__init__()
@@ -371,7 +358,7 @@ class Unet3D(nn.Module):
         # initial conv
 
         init_dim = default(init_dim, dim)
-        assert is_odd(init_kernel_size)
+        assert init_kernel_size % 2 == 1
 
         init_padding = init_kernel_size // 2
         self.init_conv = nn.Conv3d(1, init_dim, (1, init_kernel_size, init_kernel_size), padding = (0, init_padding, init_padding))
@@ -393,15 +380,6 @@ class Unet3D(nn.Module):
             nn.Linear(time_dim, time_dim)
         )
 
-        # text conditioning
-
-        self.has_cond = exists(cond_dim) or use_bert_text_cond
-        cond_dim = BERT_MODEL_DIM if use_bert_text_cond else cond_dim
-
-        self.null_cond_emb = nn.Parameter(torch.randn(1, cond_dim)) if self.has_cond else None
-
-        cond_dim = time_dim + int(cond_dim or 0)
-
         # layers
 
         self.downs = nn.ModuleList([])
@@ -412,7 +390,7 @@ class Unet3D(nn.Module):
         # block type
 
         block_klass = partial(ResnetBlock, groups = resnet_groups)
-        block_klass_cond = partial(block_klass, time_emb_dim = cond_dim)
+        block_klass_cond = partial(block_klass, time_emb_dim = time_dim)
 
         # modules for all layers
 
@@ -422,7 +400,7 @@ class Unet3D(nn.Module):
             self.downs.append(nn.ModuleList([
                 block_klass_cond(dim_in, dim_out),
                 block_klass_cond(dim_out, dim_out),
-                Residual(PreNorm(dim_out, SpatialLinearAttention(dim_out, heads = attn_heads))) if use_sparse_linear_attn else nn.Identity(),
+                Residual(PreNorm(dim_out, SpatialLinearAttention(dim_out, heads = attn_heads))),
                 Residual(PreNorm(dim_out, temporal_attn(dim_out))),
                 Downsample(dim_out) if not is_last else nn.Identity()
             ]))
@@ -443,7 +421,7 @@ class Unet3D(nn.Module):
             self.ups.append(nn.ModuleList([
                 block_klass_cond(dim_out * 2, dim_in),
                 block_klass_cond(dim_in, dim_in),
-                Residual(PreNorm(dim_in, SpatialLinearAttention(dim_in, heads = attn_heads))) if use_sparse_linear_attn else nn.Identity(),
+                Residual(PreNorm(dim_in, SpatialLinearAttention(dim_in, heads = attn_heads))),
                 Residual(PreNorm(dim_in, temporal_attn(dim_in))),
                 Upsample(dim_in) if not is_last else nn.Identity()
             ]))
@@ -453,29 +431,13 @@ class Unet3D(nn.Module):
             nn.Conv3d(dim, 1, 1)
         )
 
-    def forward_with_cond_scale(
-        self,
-        *args,
-        cond_scale = 2.,
-        **kwargs
-    ):
-        logits = self.forward(*args, null_cond_prob = 0., **kwargs)
-        if cond_scale == 1 or not self.has_cond:
-            return logits
-
-        null_logits = self.forward(*args, null_cond_prob = 1., **kwargs)
-        return null_logits + (logits - null_logits) * cond_scale
-
     def forward(
         self,
         x,
         time,
-        cond = None,
-        null_cond_prob = 0.,
         focus_present_mask = None,
         prob_focus_present = 0.  # probability at which a given batch sample will focus on the present (0. is all off, 1. is completely arrested attention across time)
     ):
-        assert not (self.has_cond and not exists(cond)), 'cond must be passed in if cond_dim specified'
         batch, device = x.shape[0], x.device
 
         focus_present_mask = default(focus_present_mask, lambda: prob_mask_like((batch,), prob_focus_present, device = device))
@@ -491,12 +453,6 @@ class Unet3D(nn.Module):
         t = self.time_mlp(time) if exists(self.time_mlp) else None
 
         # classifier free guidance
-
-        if self.has_cond:
-            batch, device = x.shape[0], x.device
-            mask = prob_mask_like((batch,), null_cond_prob, device = device)
-            cond = torch.where(rearrange(mask, 'b -> b 1'), self.null_cond_emb, cond)
-            t = torch.cat((t, cond), dim = -1)
 
         h = []
 
@@ -552,9 +508,6 @@ class GaussianDiffusion(nn.Module):
         num_frames,
         text_use_bert_cls = False,
         timesteps = 1000,
-        loss_type = 'l1',
-        use_dynamic_thres = False, # from the Imagen paper
-        dynamic_thres_percentile = 0.9
     ):
         super().__init__()
         self.image_size = image_size
@@ -569,7 +522,6 @@ class GaussianDiffusion(nn.Module):
 
         timesteps, = betas.shape
         self.num_timesteps = int(timesteps)
-        self.loss_type = loss_type
 
         # register buffer helper function that casts float64 to float32
 
@@ -605,11 +557,6 @@ class GaussianDiffusion(nn.Module):
 
         self.text_use_bert_cls = text_use_bert_cls
 
-        # dynamic thresholding when sampling
-
-        self.use_dynamic_thres = use_dynamic_thres
-        self.dynamic_thres_percentile = dynamic_thres_percentile
-
     def q_mean_variance(self, x_start, t):
         mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
         variance = extract(1. - self.alphas_cumprod, t, x_start.shape)
@@ -631,59 +578,41 @@ class GaussianDiffusion(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def p_mean_variance(self, x, t, clip_denoised: bool, cond = None, cond_scale = 1.):
-        x_recon = self.predict_start_from_noise(x, t=t, noise = self.denoise_fn.forward_with_cond_scale(x, t, cond = cond, cond_scale = cond_scale))
+    def p_mean_variance(self, x, t, clip_denoised: bool):
+        x_recon = self.predict_start_from_noise(x, t=t, noise = self.denoise_fn.forward(x, t))
 
         if clip_denoised:
-            s = 1.
-            if self.use_dynamic_thres:
-                s = torch.quantile(
-                    rearrange(x_recon, 'b ... -> b (...)').abs(),
-                    self.dynamic_thres_percentile,
-                    dim = -1
-                )
-
-                s.clamp_(min = 1.)
-                s = s.view(-1, *((1,) * (x_recon.ndim - 1)))
-
-            # clip by threshold, depending on whether static or dynamic
-            x_recon = x_recon.clamp(-s, s) / s
+            x_recon = x_recon.clamp(-1, 1)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
         return model_mean, posterior_variance, posterior_log_variance
 
     @torch.inference_mode()
-    def p_sample(self, x, t, cond = None, cond_scale = 1., clip_denoised = True):
+    def p_sample(self, x, t, clip_denoised = True):
         b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x = x, t = t, clip_denoised = clip_denoised, cond = cond, cond_scale = cond_scale)
+        model_mean, _, model_log_variance = self.p_mean_variance(x = x, t = t, clip_denoised = clip_denoised)
         noise = torch.randn_like(x)
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     @torch.inference_mode()
-    def p_sample_loop(self, shape, cond = None, cond_scale = 1.):
+    def p_sample_loop(self, shape):
         device = self.betas.device
 
         b = shape[0]
         img = torch.randn(shape, device=device)
 
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long), cond = cond, cond_scale = cond_scale)
+            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long))
 
         return unnormalize_img(img)
 
     @torch.inference_mode()
-    def sample(self, cond = None, cond_scale = 1., batch_size = 16):
-        device = next(self.denoise_fn.parameters()).device
-
-        if is_list_str(cond):
-            cond = bert_embed(tokenize(cond)).to(device)
-
-        batch_size = cond.shape[0] if exists(cond) else batch_size
+    def sample(self, batch_size = 16):
         image_size = self.image_size
         num_frames = self.num_frames
-        return self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size), cond = cond, cond_scale = cond_scale)
+        return self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
 
     @torch.inference_mode()
     def interpolate(self, x1, x2, t = None, lam = 0.5):
@@ -709,24 +638,15 @@ class GaussianDiffusion(nn.Module):
             extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-    def p_losses(self, x_start, t, cond = None, noise = None, **kwargs):
+    def p_losses(self, x_start, t, noise = None, **kwargs):
         b, c, f, h, w, device = *x_start.shape, x_start.device
         noise = default(noise, lambda: torch.randn_like(x_start))
 
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
 
-        if is_list_str(cond):
-            cond = bert_embed(tokenize(cond), return_cls_repr = self.text_use_bert_cls)
-            cond = cond.to(device)
+        x_recon = self.denoise_fn(x_noisy, t, **kwargs)
 
-        x_recon = self.denoise_fn(x_noisy, t, cond = cond, **kwargs)
-
-        if self.loss_type == 'l1':
-            loss = F.l1_loss(noise, x_recon)
-        elif self.loss_type == 'l2':
-            loss = F.mse_loss(noise, x_recon)
-        else:
-            raise NotImplementedError()
+        loss = F.mse_loss(noise, x_recon)
 
         return loss
 
@@ -736,9 +656,6 @@ class GaussianDiffusion(nn.Module):
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
         x = normalize_img(x)
         return self.p_losses(x, t, *args, **kwargs)
-
-def identity(t, *args, **kwargs):
-    return t
 
 def normalize_img(t):
     return 2 * ((t - PR_MIN) / (PR_MAX - PR_MIN)) - 1
@@ -778,8 +695,7 @@ class Trainer(object):
         update_ema_every = 10,
         save_and_sample_every = 1000,
         results_folder = '/results',
-        num_sample_rows = 4,
-        max_grad_norm = None
+        num_samples = 16,
     ):
         super().__init__()
         self.model = diffusion_model
@@ -806,9 +722,8 @@ class Trainer(object):
 
         self.amp = amp
         self.scaler = GradScaler(enabled = amp)
-        self.max_grad_norm = max_grad_norm
 
-        self.num_sample_rows = num_sample_rows
+        self.num_samples = num_samples
         self.results_folder = Path(results_folder)
         self.results_folder.mkdir(exist_ok = True, parents = True)
 
@@ -849,12 +764,9 @@ class Trainer(object):
         self,
         prob_focus_present = 0.,
         focus_present_mask = None,
-        log_fn = noop
     ):
-        assert callable(log_fn)
-
         while self.step < self.train_num_steps:
-            for i in range(self.gradient_accumulate_every):
+            for _ in range(self.gradient_accumulate_every):
                 data = next(self.dl)
                 if torch.cuda.is_available():
                     data = data.cuda()
@@ -870,12 +782,6 @@ class Trainer(object):
 
                 print(f'{self.step}: {loss.item()}')
 
-            log = {'loss': loss.item()}
-
-            if exists(self.max_grad_norm):
-                self.scaler.unscale_(self.opt)
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-
             self.scaler.step(self.opt)
             self.scaler.update()
             self.opt.zero_grad()
@@ -885,20 +791,17 @@ class Trainer(object):
 
             if self.step != 0 and self.step % self.save_and_sample_every == 0:
                 milestone = self.step // self.save_and_sample_every
-                num_samples = self.num_sample_rows ** 2
-                batches = num_to_groups(num_samples, self.batch_size)
+                batches = num_to_groups(self.num_samples, self.batch_size)
 
                 all_videos_list = list(map(lambda n: self.ema_model.sample(batch_size=n), batches))
                 all_videos_list = torch.cat(all_videos_list, dim = 0)
-                all_videos_list = torch.square(all_videos_list) # Temporary: should be moved to sample function
+                all_videos_list = torch.square(all_videos_list) # TODO: Move this to the sample function
                 
                 video_path = str(self.results_folder / str(f'{milestone}.pt'))
                 torch.save(all_videos_list, video_path)
                 
-                log = {**log, 'sample': video_path}
                 self.save(milestone)
 
-            log_fn(log)
             self.step += 1
 
         print('training completed')

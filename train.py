@@ -11,7 +11,6 @@ diffusion = GaussianDiffusion(
     image_size = 64,
     num_frames = 10,
     timesteps = 1000,   # number of steps
-    loss_type = 'l2'    # L1 or L2
 )
 
 if torch.cuda.is_available():
