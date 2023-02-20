@@ -2,12 +2,11 @@
 
 #SBATCH --job-name climate
 #SBATCH --nodes 1
-#SBATCH --gres gpu:A100:1
+#SBATCH --gres gpu:1
 #SBATCH --mem 22G
-#SBATCH --partition cnu
+#SBATCH --partition gpu,gpu_short
 #SBATCH --account COSC020762
-#SBATCH --output slurm.out
-#SBATCH --exclude bp1-gpu031,bp1-gpu032
+#SBATCH --output slurm_sample.out
 
 echo Running on host `hostname`
 echo Time is `date`
@@ -18,4 +17,4 @@ echo `echo $SLURM_JOB_NODELIST | uniq`
 echo GPU number: $CUDA_VISIBLE_DEVICES
 
 #! Run the executable
-python3 -u train.py
+python3 -u sample.py
