@@ -612,7 +612,8 @@ class GaussianDiffusion(nn.Module):
     def sample(self, batch_size = 16):
         image_size = self.image_size
         num_frames = self.num_frames
-        return self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
+        samples = self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
+        return torch.square(samples)
 
     @torch.inference_mode()
     def interpolate(self, x1, x2, t = None, lam = 0.5):
@@ -795,7 +796,6 @@ class Trainer(object):
 
                 all_videos_list = list(map(lambda n: self.ema_model.sample(batch_size=n), batches))
                 all_videos_list = torch.cat(all_videos_list, dim = 0)
-                all_videos_list = torch.square(all_videos_list) # TODO: Move this to the sample function
                 
                 video_path = str(self.results_folder / str(f'{milestone}.pt'))
                 torch.save(all_videos_list, video_path)
