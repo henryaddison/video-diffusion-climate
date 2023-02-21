@@ -2,7 +2,7 @@ import os
 import sys
 import xarray as xr
 
-HIS = 3 * 30 * 24  #  Hours in season
+HIS = 3 * 30 * 24  #  Hours in a season
 TEST_RANGES = (range(i * HIS, (i + 1) * HIS) for i in range(0, 240, 5))
 TRAIN_RANGES = (range(i * HIS, (i + 4) * HIS) for i in range(1, 240, 5))
 
