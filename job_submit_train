@@ -3,7 +3,7 @@
 #SBATCH --job-name climate
 #SBATCH --nodes 1
 #SBATCH --gres gpu:A100:1
-#SBATCH --mem 22G
+#SBATCH --mem 124G
 #SBATCH --partition cnu
 #SBATCH --account COSC020762
 #SBATCH --output slurm_train.out
