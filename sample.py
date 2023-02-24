@@ -1,9 +1,9 @@
 import torch
 from video_diffusion_pytorch import Unet3D, GaussianDiffusion, num_to_groups
 
-NUM_SAMPLES = 1024
-BATCH_SIZE = 4
-MILESTONE = 124
+NUM_SAMPLES = 16384
+BATCH_SIZE = 32
+MILESTONE = 54
 
 model = Unet3D(
     dim=64,
@@ -17,7 +17,7 @@ diffusion = GaussianDiffusion(
     timesteps=1000,   # number of steps
 )
 
-checkpoint = torch.load(f"/user/work/cj19328/results_2r_l2/model-{MILESTONE}.pt")
+checkpoint = torch.load(f"/user/work/cj19328/results/model-{MILESTONE}.pt")
 diffusion.load_state_dict(checkpoint['ema'])
 
 samples=torch.empty(0, 1, 10, 64, 64)
