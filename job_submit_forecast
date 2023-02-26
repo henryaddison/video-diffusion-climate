@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#SBATCH --job-name climate
+#SBATCH --nodes 1
+#SBATCH --gres gpu:1
+#SBATCH --mem 16G
+#SBATCH --partition gpu_short,gpu,cnu
+#SBATCH --account COSC020762
+#SBATCH --output slurm_forecast.out
+
+echo Running on host `hostname`
+echo Time is `date`
+echo Directory is `pwd`
+echo Slurm job ID is $SLURM_JOB_ID
+echo This job runs on the following machines:
+echo `echo $SLURM_JOB_NODELIST | uniq`
+echo GPU number: $CUDA_VISIBLE_DEVICES
+
+#! Run the executable
+python3 -u forecast.py

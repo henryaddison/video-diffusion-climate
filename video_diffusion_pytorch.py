@@ -609,6 +609,24 @@ class GaussianDiffusion(nn.Module):
         samples = self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
         return torch.square(samples)
 
+    @torch.inference_mode()
+    def sample_cond_replacement(self, x_a):
+        x_a = normalize_img(torch.sqrt(x_a))
+        a_len = x_a.shape[0]
+
+        img = torch.randn((1, 1, self.num_frames, self.image_size, self.image_size), device=x_a.device)
+
+        for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
+            t = torch.full((1,), i, device=x_a.device, dtype=torch.long)
+            x_a_t = self.q_sample(x_start=x_a, t=t)
+            img = self.p_sample(img, t)
+            img[0][0][:a_len] = x_a_t
+
+        img[0][0][:a_len] = x_a
+
+
+        return torch.square(unnormalize_img(img))
+
     def q_sample(self, x_start, t, noise = None):
         noise = default(noise, lambda: torch.randn_like(x_start))
 
