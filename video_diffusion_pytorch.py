@@ -557,12 +557,6 @@ class GaussianDiffusion(nn.Module):
 
         self.text_use_bert_cls = text_use_bert_cls
 
-    def q_mean_variance(self, x_start, t):
-        mean = extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-        variance = extract(1. - self.alphas_cumprod, t, x_start.shape)
-        log_variance = extract(self.log_one_minus_alphas_cumprod, t, x_start.shape)
-        return mean, variance, log_variance
-
     def predict_start_from_noise(self, x_t, t, noise):
         return (
             extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
@@ -614,22 +608,6 @@ class GaussianDiffusion(nn.Module):
         num_frames = self.num_frames
         samples = self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
         return torch.square(samples)
-
-    @torch.inference_mode()
-    def interpolate(self, x1, x2, t = None, lam = 0.5):
-        b, *_, device = *x1.shape, x1.device
-        t = default(t, self.num_timesteps - 1)
-
-        assert x1.shape == x2.shape
-
-        t_batched = torch.stack([torch.tensor(t, device=device)] * b)
-        xt1, xt2 = map(lambda x: self.q_sample(x, t=t_batched), (x1, x2))
-
-        img = (1 - lam) * xt1 + lam * xt2
-        for i in tqdm(reversed(range(0, t)), desc='interpolation sample time step', total=t):
-            img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long))
-
-        return img
 
     def q_sample(self, x_start, t, noise = None):
         noise = default(noise, lambda: torch.randn_like(x_start))
