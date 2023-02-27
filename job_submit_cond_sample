@@ -6,7 +6,7 @@
 #SBATCH --mem 16G
 #SBATCH --partition gpu_short,gpu,cnu
 #SBATCH --account COSC020762
-#SBATCH --output slurm_forecast.out
+#SBATCH --output slurm_cond_sample.out
 
 echo Running on host `hostname`
 echo Time is `date`
@@ -17,4 +17,4 @@ echo `echo $SLURM_JOB_NODELIST | uniq`
 echo GPU number: $CUDA_VISIBLE_DEVICES
 
 #! Run the executable
-python3 -u forecast.py
+python3 -u cond_sample.py

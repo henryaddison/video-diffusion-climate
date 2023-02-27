@@ -506,7 +506,6 @@ class GaussianDiffusion(nn.Module):
         *,
         image_size,
         num_frames,
-        text_use_bert_cls = False,
         timesteps = 1000,
     ):
         super().__init__()
@@ -552,10 +551,6 @@ class GaussianDiffusion(nn.Module):
         register_buffer('posterior_log_variance_clipped', torch.log(posterior_variance.clamp(min =1e-20)))
         register_buffer('posterior_mean_coef1', betas * torch.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod))
         register_buffer('posterior_mean_coef2', (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod))
-
-        # text conditioning parameters
-
-        self.text_use_bert_cls = text_use_bert_cls
 
     def predict_start_from_noise(self, x_t, t, noise):
         return (
@@ -610,9 +605,8 @@ class GaussianDiffusion(nn.Module):
         return torch.square(samples)
 
     @torch.inference_mode()
-    def sample_cond_replacement(self, x_a):
+    def sample_cond_replacement(self, x_a, mask_a):
         x_a = normalize_img(torch.sqrt(x_a))
-        a_len = x_a.shape[0]
 
         img = torch.randn((1, 1, self.num_frames, self.image_size, self.image_size), device=x_a.device)
 
@@ -620,10 +614,9 @@ class GaussianDiffusion(nn.Module):
             t = torch.full((1,), i, device=x_a.device, dtype=torch.long)
             x_a_t = self.q_sample(x_start=x_a, t=t)
             img = self.p_sample(img, t)
-            img[0][0][:a_len] = x_a_t
+            img = img * ~mask_a + x_a_t * mask_a
 
-        img[0][0][:a_len] = x_a
-
+        img = img * ~mask_a + x_a * mask_a
 
         return torch.square(unnormalize_img(img))
 
