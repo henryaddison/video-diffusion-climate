@@ -567,25 +567,38 @@ class GaussianDiffusion(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def p_mean_variance(self, x, t, clip_denoised: bool):
-        x_recon = self.predict_start_from_noise(x, t=t, noise = self.denoise_fn.forward(x, t))
+    def p_mean_variance(self, x_t, t, clip_denoised: bool, x_a = None, indices_a = None):
+        if x_a is not None:
+            indices_b = [i for i in range(0, self.num_frames) if i not in indices_a]
+            x_t = x_t.detach()
+            x_t_b = x_t[:, :, indices_b]
+            x_t_b.requires_grad = True
+            x_t[:, :, indices_b] = x_t_b
+
+        x_0_hat = self.predict_start_from_noise(x_t, t=t, noise = self.denoise_fn.forward(x_t, t))
+
+        if x_a is not None:
+            omega_t = 100
+            alpha_t = extract(self.sqrt_alphas_cumprod, t, (1, 1)).item()
+            x_0_hat_a = x_0_hat[:, :, indices_a]
+            error = F.mse_loss(x_a, x_0_hat_a)
+            grad = torch.autograd.grad(outputs = error, inputs = x_t_b)[0]
+            x_0_hat[:, :, indices_b] -= ((omega_t * alpha_t) / 2) * grad
 
         if clip_denoised:
-            x_recon = x_recon.clamp(-1, 1)
+            x_0_hat = x_0_hat.clamp(-1, 1)
 
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_0_hat, x_t=x_t, t=t)
         return model_mean, posterior_variance, posterior_log_variance
 
-    @torch.inference_mode()
-    def p_sample(self, x, t, clip_denoised = True):
+    def p_sample(self, x, t, clip_denoised = True, x_a = None, indices_a = None):
         b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x = x, t = t, clip_denoised = clip_denoised)
+        model_mean, _, model_log_variance = self.p_mean_variance(x_t = x, t = t, clip_denoised = clip_denoised, x_a = x_a, indices_a = indices_a)
         noise = torch.randn_like(x)
         # no noise when t == 0
         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
-    @torch.inference_mode()
     def p_sample_loop(self, shape):
         device = self.betas.device
 
@@ -604,21 +617,19 @@ class GaussianDiffusion(nn.Module):
         samples = self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
         return torch.square(samples)
 
-    @torch.inference_mode()
-    def sample_cond_replacement(self, x_a, mask_a):
+    def sample_cond(self, x_a, indices_a):
         x_a = normalize_img(torch.sqrt(x_a))
-
-        img = torch.randn((1, 1, self.num_frames, self.image_size, self.image_size), device=x_a.device)
+        x_t = torch.randn((1, 1, self.num_frames, self.image_size, self.image_size), device=x_a.device)
 
         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
             t = torch.full((1,), i, device=x_a.device, dtype=torch.long)
-            x_a_t = self.q_sample(x_start=x_a, t=t)
-            img = self.p_sample(img, t)
-            img = img * ~mask_a + x_a_t * mask_a
+            x_t = self.p_sample(x_t, t, x_a = x_a, indices_a=indices_a)
+            x_t[:, :, indices_a] = self.q_sample(x_start=x_a, t=t)
 
-        img = img * ~mask_a + x_a * mask_a
+        x_t[:, :, indices_a] = x_a
+        x_t = torch.square(unnormalize_img(x_t.detach()))
 
-        return torch.square(unnormalize_img(img))
+        return x_t
 
     def q_sample(self, x_start, t, noise = None):
         noise = default(noise, lambda: torch.randn_like(x_start))
