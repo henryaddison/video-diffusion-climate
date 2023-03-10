@@ -10,7 +10,7 @@ diffusion = GaussianDiffusion(
     model,
     image_size=64,
     num_frames=10,
-    timesteps=1000,
+    num_timesteps=1000,
 )
 
 if torch.cuda.is_available():
@@ -21,13 +21,13 @@ trainer = Trainer(
     '/user/work/cj19328/train_test/train_sliding-10f-1s_sqrt.pt',
     train_batch_size=32,
     train_lr=1e-4,
-    save_and_sample_every=1000,
+    save_and_sample_every=5000,
     train_num_steps=700000,
     gradient_accumulate_every=2,
     ema_decay=0.995,
     amp=True,
-    results_folder='/user/work/cj19328/results'
+    results_folder='/user/work/cj19328/results_continuous'
 )
 
-# trainer.load(28)
+trainer.load(4)
 trainer.train()
