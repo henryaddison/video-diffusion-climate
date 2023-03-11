@@ -16,7 +16,7 @@ from einops_exts import check_shape, rearrange_many
 
 from rotary_embedding_torch import RotaryEmbedding
 
-PR_MAX = 8.773123741149902
+PR_MAX = 76.96769714355469
 PR_MIN = 0
 
 # helpers functions
@@ -499,7 +499,7 @@ class GaussianDiffusion(nn.Module):
         self.num_frames = num_frames
         self.num_timesteps = num_timesteps
 
-    def log_snr_schedule_cosine(self, t, log_snr_min = -15, log_snr_max = 15):
+    def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
         t_min = math.atan(math.exp(-0.5 * log_snr_max))
         t_max = math.atan(math.exp(-0.5 * log_snr_min))
@@ -526,7 +526,7 @@ class GaussianDiffusion(nn.Module):
         mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
         sigma_st = (sigma_ts * sigma_s) / sigma_t
 
-        print(mu_st.mean().item())
+        # print(mu_st.mean().item())
 
         return mu_st, sigma_st
 
@@ -563,7 +563,8 @@ class GaussianDiffusion(nn.Module):
     @torch.inference_mode()
     def sample(self, batch_size = 16):
         samples = self.p_sample_loop((batch_size, 1, self.num_frames, self.image_size, self.image_size))
-        return torch.square(samples)
+        return samples
+        # return torch.square(samples)
 
     def q_sample(self, x, lambda_t, noise):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)

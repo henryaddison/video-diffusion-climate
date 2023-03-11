@@ -3,7 +3,7 @@ from video_diffusion_pytorch import Unet3D, GaussianDiffusion, num_to_groups
 
 NUM_SAMPLES = 16384
 BATCH_SIZE = 32
-MILESTONE = 1
+MILESTONE = 15
 
 model = Unet3D(
     dim=64,
