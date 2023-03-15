@@ -484,20 +484,18 @@ class Unet3D(nn.Module):
 
 
 
-
-
-class MonotonicNet(nn.Module):
-    def __init__(self):
+class MonotonicBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.layer_1 = nn.Linear(1, 128, bias=False)
-        self.layer_2 = nn.Linear(128, 128, bias=False)
-        self.layer_3 = nn.Linear(128, 1, bias=False)
+        self.layer_1 = nn.Linear(in_channels, out_channels, bias=False)
+        self.layer_2 = nn.Linear(out_channels, out_channels, bias=False)
+        self.layer_3 = nn.Linear(out_channels, out_channels, bias=False)
 
         self.tanh = nn.Tanh()
 
-        nn.init.xavier_normal_(self.layer_1.weight, gain=0.1)
-        nn.init.xavier_normal_(self.layer_2.weight, gain=0.1)
-        nn.init.xavier_normal_(self.layer_3.weight, gain=0.1)
+        nn.init.xavier_normal_(self.layer_1.weight, gain=1e-1)
+        nn.init.xavier_normal_(self.layer_2.weight, gain=1e-1)
+        nn.init.xavier_normal_(self.layer_3.weight, gain=1e-1)
         self.layer_1.weight.data = torch.abs(self.layer_1.weight.data)
         self.layer_2.weight.data = torch.abs(self.layer_2.weight.data)
         self.layer_3.weight.data = torch.abs(self.layer_3.weight.data)
@@ -505,21 +503,70 @@ class MonotonicNet(nn.Module):
         self.enforce_monotonicity()
 
     def forward(self, x):
+        identity = x
+
         x = self.layer_1(x)
         x = self.tanh(x)
 
         x = self.layer_2(x)
         x = torch.exp(x) - 1
-        x = x.clamp(0, 1000)
+        x = x.clamp(0, 1e4)
 
         x = self.layer_3(x)
+
+        x += identity
+
+        x = self.tanh(x)
+
+        return x
+    
+    def enforce_monotonicity(self):
+        for p in self.parameters():
+            p.data.clamp_(min=0)
+
+class MonotonicNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.layer_1 = nn.Linear(1, 64, bias=False)
+
+        self.block_1 = MonotonicBlock(64, 64)
+        self.block_2 = MonotonicBlock(64, 64)
+        self.block_3 = MonotonicBlock(64, 64)
+        self.block_4 = MonotonicBlock(64, 64)
+        self.block_5 = MonotonicBlock(64, 64)
+
+        self.layer_2 = nn.Linear(64, 1, bias=False)
+
+        self.tanh = nn.Tanh()
+
+        nn.init.xavier_normal_(self.layer_1.weight, gain=1e-1)
+        nn.init.xavier_normal_(self.layer_2.weight, gain=1e-1)
+        self.layer_1.weight.data = torch.abs(self.layer_1.weight.data)
+        self.layer_2.weight.data = torch.abs(self.layer_2.weight.data)
+
+        self.enforce_monotonicity()
+
+    def forward(self, x):
+        x = self.layer_1(x)
+
+        x = self.block_1(x)
+        x = self.block_2(x)
+        x = self.block_3(x)
+        x = self.block_4(x)
+        x = self.block_5(x)
+
+        x = self.layer_2(x)
         x = self.tanh(x)
 
         return x
 
     def enforce_monotonicity(self):
+        # pass
+        self.block_1.enforce_monotonicity()
+        self.block_2.enforce_monotonicity()
         for p in self.parameters():
-            p.data.clamp_(0)
+            p.data.clamp_(min=0)
 
     def normalise(self, y):
         y_max = self(torch.tensor([PR_MAX]).cuda()).item()
@@ -533,6 +580,9 @@ class MonotonicNet(nn.Module):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         return dy_dx
 
+    def clip_grads(self):
+        torch.nn.utils.clip_grad_value_(self.parameters(), 1e2)
+
     @torch.inference_mode()
     def plot(self):
         xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
@@ -542,6 +592,7 @@ class MonotonicNet(nn.Module):
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
+
 
 
 # gaussian diffusion trainer class
@@ -640,26 +691,27 @@ class GaussianDiffusion(nn.Module):
         x_shape = x.shape
         y = self.monotonic_net(x.reshape(*x_shape, 1))
         y = y.reshape(*x_shape)
-        y_normalised = self.monotonic_net.normalise(y)
+        y = self.monotonic_net.normalise(y)
 
-        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y_normalised)).mean()
+        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y)).mean()
 
         times = torch.zeros(b).uniform_(0, 1).cuda()
         # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
 
         lambda_t = self.log_snr_schedule_cosine(times)
         noise = torch.randn_like(x)
-        y_noisy = self.q_sample(y_normalised, lambda_t, noise)
+        y_noisy = self.q_sample(y, lambda_t, noise)
         v = self.unet(y_noisy, lambda_t.reshape(-1))
 
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
-        v_target = alpha_t * noise - sigma_t * y_normalised
+        v_target = alpha_t * noise - sigma_t * y
 
-        print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
+        # print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
 
         diffusion_loss = F.mse_loss(v, v_target)
         loss = diffusion_loss - log_dy_dx
-        # print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
+        self.monotonic_net.clip_grads()
+        print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
 
         return loss
 
@@ -970,9 +1022,11 @@ class Trainer(object):
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
 
+            if self.step % 100 == 0:
+                self.model.monotonic_net.plot() # TODO: Remove this
+
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
-                self.model.monotonic_net.plot() # TODO: Remove this
 
             if self.step != 0 and self.step % self.save_and_sample_every == 0:
                 milestone = self.step // self.save_and_sample_every
