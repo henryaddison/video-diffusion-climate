@@ -489,37 +489,31 @@ class Unet3D(nn.Module):
 class MonotonicNet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.layer_1_1 = nn.Linear(1, 32, bias=False)
-        self.layer_1_2 = nn.Linear(1, 32, bias=False)
-        self.layer_2 = nn.Linear(32, 1, bias=False)
+        self.layer_1 = nn.Linear(1, 128, bias=False)
+        self.layer_2 = nn.Linear(128, 128, bias=False)
+        self.layer_3 = nn.Linear(128, 1, bias=False)
 
-        self.softplus = nn.Softplus()
         self.tanh = nn.Tanh()
 
-        self.gate_layer = nn.Linear(1, 1)
-
-        nn.init.xavier_normal_(self.layer_1_1.weight, gain=0.1)
-        nn.init.xavier_normal_(self.layer_1_2.weight, gain=0.1)
+        nn.init.xavier_normal_(self.layer_1.weight, gain=0.1)
         nn.init.xavier_normal_(self.layer_2.weight, gain=0.1)
-        self.layer_1_1.weight.data = torch.abs(self.layer_1_1.weight.data)
-        self.layer_1_2.weight.data = torch.abs(self.layer_1_2.weight.data)
+        nn.init.xavier_normal_(self.layer_3.weight, gain=0.1)
+        self.layer_1.weight.data = torch.abs(self.layer_1.weight.data)
         self.layer_2.weight.data = torch.abs(self.layer_2.weight.data)
+        self.layer_3.weight.data = torch.abs(self.layer_3.weight.data)
 
         self.enforce_monotonicity()
 
     def forward(self, x):
-        x_1 = self.layer_1_1(x)
-        x_1 = self.softplus(x_1) - torch.log(torch.tensor(2.0))
-
-        x_2 = self.layer_1_2(x)
-        x_2 = self.tanh(x_2)
-
-        gate = self.gate_layer(x)
-        gate = gate.clamp(0, 1)
-        x = gate * x_1 + (1 - gate) * x_2
+        x = self.layer_1(x)
+        x = self.tanh(x)
 
         x = self.layer_2(x)
-        x = x.clamp(0, 1)
+        x = torch.exp(x) - 1
+        x = x.clamp(0, 1000)
+
+        x = self.layer_3(x)
+        x = self.tanh(x)
 
         return x
 
@@ -528,19 +522,24 @@ class MonotonicNet(nn.Module):
             p.data.clamp_(0)
 
     def normalise(self, y):
-        return 2 * y - 1
+        y_max = self(torch.tensor([PR_MAX]).cuda()).item()
+        return 2 * (y / y_max) - 1
 
     def unnormalise(self, y):
-        return (y + 1) / 2
+        y_max = self(torch.tensor([PR_MAX]).cuda()).item()
+        return (y + 1) / 2 * y_max
 
     def dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
-        return torch.mean(dy_dx)
+        return dy_dx
 
     @torch.inference_mode()
     def plot(self):
         xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
         ys = self.forward(xs)
+        for (i, j) in zip(xs.cpu().tolist(), ys.cpu().tolist()):
+            print(i, j)
+        plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
 
@@ -643,7 +642,7 @@ class GaussianDiffusion(nn.Module):
         y = y.reshape(*x_shape)
         y_normalised = self.monotonic_net.normalise(y)
 
-        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y))
+        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y_normalised)).mean()
 
         times = torch.zeros(b).uniform_(0, 1).cuda()
         # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
@@ -656,11 +655,11 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         v_target = alpha_t * noise - sigma_t * y_normalised
 
-        print("unnormalised min max", self.monotonic_net(torch.tensor([0])), self.monotonic_net(torch.tensor([1])))
+        print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
 
         diffusion_loss = F.mse_loss(v, v_target)
         loss = diffusion_loss - log_dy_dx
-        print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
+        # print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
 
         return loss
 
@@ -973,6 +972,7 @@ class Trainer(object):
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
+                self.model.monotonic_net.plot() # TODO: Remove this
 
             if self.step != 0 and self.step % self.save_and_sample_every == 0:
                 milestone = self.step // self.save_and_sample_every
