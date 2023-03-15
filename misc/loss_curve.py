@@ -10,7 +10,8 @@ def extract_loss_values(file_name):
         for line in f:
             match = re.match(r'(\d+): (\d+\.\d+)', line)
             if match:
-                loss_values.append(float(match.group(2)))
+                loss_value = float( line.split(": ")[1])
+                loss_values.append(loss_value)
     return loss_values
 
 

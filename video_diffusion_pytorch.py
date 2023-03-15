@@ -12,12 +12,15 @@ from torch.cuda.amp import autocast, GradScaler
 
 from tqdm import tqdm
 from einops import rearrange
-from einops_exts import check_shape, rearrange_many
+from einops_exts import rearrange_many
 
 from rotary_embedding_torch import RotaryEmbedding
 
+from matplotlib import pyplot as plt
+
 PR_MAX = 76.96769714355469
-PR_MIN = 0
+# PR_MAX = 8.773123741149902
+PR_MIN = 0.
 
 # helpers functions
 
@@ -452,8 +455,6 @@ class Unet3D(nn.Module):
 
         t = self.time_mlp(time) if exists(self.time_mlp) else None
 
-        # classifier free guidance
-
         h = []
 
         for block1, block2, spatial_attn, temporal_attn, downsample in self.downs:
@@ -480,9 +481,71 @@ class Unet3D(nn.Module):
         x = torch.cat((x, r), dim = 1)
         return self.final_conv(x)
 
+
+
+
+
+
+class MonotonicNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layer_1_1 = nn.Linear(1, 32, bias=False)
+        self.layer_1_2 = nn.Linear(1, 32, bias=False)
+        self.layer_2 = nn.Linear(32, 1, bias=False)
+
+        self.softplus = nn.Softplus()
+        self.tanh = nn.Tanh()
+
+        self.gate_layer = nn.Linear(1, 1)
+
+        nn.init.xavier_normal_(self.layer_1_1.weight, gain=0.1)
+        nn.init.xavier_normal_(self.layer_1_2.weight, gain=0.1)
+        nn.init.xavier_normal_(self.layer_2.weight, gain=0.1)
+        self.layer_1_1.weight.data = torch.abs(self.layer_1_1.weight.data)
+        self.layer_1_2.weight.data = torch.abs(self.layer_1_2.weight.data)
+        self.layer_2.weight.data = torch.abs(self.layer_2.weight.data)
+
+        self.enforce_monotonicity()
+
+    def forward(self, x):
+        x_1 = self.layer_1_1(x)
+        x_1 = self.softplus(x_1) - torch.log(torch.tensor(2.0))
+
+        x_2 = self.layer_1_2(x)
+        x_2 = self.tanh(x_2)
+
+        gate = self.gate_layer(x)
+        gate = gate.clamp(0, 1)
+        x = gate * x_1 + (1 - gate) * x_2
+
+        x = self.layer_2(x)
+        x = x.clamp(0, 1)
+
+        return x
+
+    def enforce_monotonicity(self):
+        for p in self.parameters():
+            p.data.clamp_(0)
+
+    def normalise(self, y):
+        return 2 * y - 1
+
+    def unnormalise(self, y):
+        return (y + 1) / 2
+
+    def dy_dx(self, x, y):
+        dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
+        return torch.mean(dy_dx)
+
+    @torch.inference_mode()
+    def plot(self):
+        xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
+        ys = self.forward(xs)
+        plt.plot(xs.cpu(), ys.cpu())
+        plt.savefig("monotonic_net.png")
+
+
 # gaussian diffusion trainer class
-
-
 
 class GaussianDiffusion(nn.Module):
     def __init__(
@@ -498,8 +561,9 @@ class GaussianDiffusion(nn.Module):
         self.image_size = image_size
         self.num_frames = num_frames
         self.num_timesteps = num_timesteps
+        self.monotonic_net = MonotonicNet()
 
-    def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
+    def log_snr_schedule_cosine(self, t, log_snr_min = -15, log_snr_max = 15):
         b = t.shape[0]
         t_min = math.atan(math.exp(-0.5 * log_snr_max))
         t_max = math.atan(math.exp(-0.5 * log_snr_min))
@@ -525,43 +589,42 @@ class GaussianDiffusion(nn.Module):
 
         mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
         sigma_st = (sigma_ts * sigma_s) / sigma_t
-
-        # print(mu_st.mean().item())
-
+        
         return mu_st, sigma_st
 
     def p_mean_variance(self, z_t, lambda_s, lambda_t):
         v_hat_t = self.unet(z_t, lambda_t.reshape(-1))
-
         x_hat = self.predict_x_hat(z_t, v_hat_t, lambda_t)
         x_hat = x_hat.clamp(-1, 1)
-
         mu_st, sigma_st = self.q_posterior(z_t, x_hat, lambda_s, lambda_t)
-
         return mu_st, sigma_st
 
-    def p_sample(self, z_t, lambda_s, lambda_t):
+    def p_sample(self, z_t, lambda_s, lambda_t, is_final_step):
         mu_st, sigma_st = self.p_mean_variance(z_t, lambda_s, lambda_t)
         noise = torch.randn_like(z_t)
         
-        return mu_st + sigma_st * noise
+        return mu_st + sigma_st * noise * (1 - is_final_step)
 
     def p_sample_loop(self, shape):
         z_t = torch.randn(shape).cuda()
         b = shape[0]
-        
+
         for i in tqdm(reversed(range(1, self.num_timesteps + 1)), desc='sampling loop time step', total=self.num_timesteps):
             s = torch.full((b,), (i - 1) / self.num_timesteps).cuda()
             t = torch.full((b,), i / self.num_timesteps).cuda()
             lambda_s = self.log_snr_schedule_cosine(s)
             lambda_t = self.log_snr_schedule_cosine(t)
+            z_t = self.p_sample(z_t, lambda_s, lambda_t, is_final_step = i == 1)
 
-            z_t = self.p_sample(z_t, lambda_s, lambda_t)
+        x = z_t.clamp_(-1, 1)
 
-        return unnormalize_img(z_t)
+        return x
+        # return unnormalize_img(x)
 
     @torch.inference_mode()
     def sample(self, batch_size = 16):
+        self.monotonic_net.plot()
+
         samples = self.p_sample_loop((batch_size, 1, self.num_frames, self.image_size, self.image_size))
         return samples
         # return torch.square(samples)
@@ -574,23 +637,35 @@ class GaussianDiffusion(nn.Module):
     def p_losses(self, x):
         b = x.shape[0]
 
+        x.requires_grad = True
+        x_shape = x.shape
+        y = self.monotonic_net(x.reshape(*x_shape, 1))
+        y = y.reshape(*x_shape)
+        y_normalised = self.monotonic_net.normalise(y)
+
+        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y))
+
         times = torch.zeros(b).uniform_(0, 1).cuda()
         # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
 
         lambda_t = self.log_snr_schedule_cosine(times)
         noise = torch.randn_like(x)
-        x_noisy = self.q_sample(x, lambda_t, noise)
-        v = self.unet(x_noisy, lambda_t.reshape(-1))
+        y_noisy = self.q_sample(y_normalised, lambda_t, noise)
+        v = self.unet(y_noisy, lambda_t.reshape(-1))
 
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
-        target = alpha_t * noise - sigma_t * x
+        v_target = alpha_t * noise - sigma_t * y_normalised
 
-        loss = F.mse_loss(v, target)
+        print("unnormalised min max", self.monotonic_net(torch.tensor([0])), self.monotonic_net(torch.tensor([1])))
+
+        diffusion_loss = F.mse_loss(v, v_target)
+        loss = diffusion_loss - log_dy_dx
+        print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
 
         return loss
 
     def forward(self, x):
-        x = normalize_img(x)
+        # x = normalize_img(x)
         return self.p_losses(x)
 
 
@@ -772,11 +847,11 @@ class GaussianDiffusion(nn.Module):
 #         x = normalize_img(x)
 #         return self.p_losses(x, t, *args, **kwargs)
 
-def normalize_img(t):
-    return 2 * ((t - PR_MIN) / (PR_MAX - PR_MIN)) - 1
+# def normalize_img(t):
+#     return 2 * ((t - PR_MIN) / (PR_MAX - PR_MIN)) - 1
 
-def unnormalize_img(t):
-    return (t + 1) / 2 * (PR_MAX - PR_MIN) + PR_MIN
+# def unnormalize_img(t):
+#     return (t + 1) / 2 * (PR_MAX - PR_MIN) + PR_MIN
 
 class Dataset(data.Dataset):
     def __init__(
@@ -894,6 +969,7 @@ class Trainer(object):
             self.scaler.step(self.opt)
             self.scaler.update()
             self.opt.zero_grad()
+            self.model.monotonic_net.enforce_monotonicity()
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
