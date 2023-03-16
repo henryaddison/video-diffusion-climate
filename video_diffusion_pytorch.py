@@ -520,7 +520,6 @@ class MonotonicNet(nn.Module):
         x_2 = self.act(x_2)
         x_2 = torch.exp(x_2) - 1
         x_2 = torch.exp(x_2) - 1
-        x_2 = torch.exp(x_2) - 1
 
         x = x_1 + x_2
 
@@ -535,29 +534,42 @@ class MonotonicNet(nn.Module):
     def normalise(self, y):
         y_max = self(torch.tensor([PR_MAX]).cuda()).item()
         y_min = self(torch.tensor([PR_MIN]).cuda()).item()
-        return 2 * ((y - y_min) / (y_max - y_min)) - 1
+        y_normalised = 2 * ((y - y_min) / (y_max - y_min)) - 1
+        y_normalised = torch.clamp(y_normalised, -1, 1)
+        return y_normalised
 
     def unnormalise(self, y):
         y_max = self(torch.tensor([PR_MAX]).cuda()).item()
         y_min = self(torch.tensor([PR_MIN]).cuda()).item()
-        return (y + 1) / 2 * (y_max - y_min) + y_min
+        y_unnormalised = (y + 1) / 2 * (y_max - y_min) + y_min
+        y_unnormalised = torch.clamp(y_unnormalised, PR_MIN, PR_MAX)
+        return y_unnormalised
 
     def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         dy_dx_mean = torch.mean(dy_dx, dim=(1, 2, 3, 4))
         log_dy_dx = torch.log(torch.abs(dy_dx_mean))
         return torch.mean(log_dy_dx)
+    
+    def l2_regularisation(self, l2_reg_strength = 1):
+        l2_reg_strength = 1
+        l2_reg_loss = 0.
+        for p in self.parameters():
+            l2_reg_loss += torch.norm(p, p=2)
+        return l2_reg_loss * l2_reg_strength
 
     @torch.inference_mode()
     def plot(self):
-        xs = torch.linspace(PR_MIN, PR_MAX, 10000).reshape(-1, 1).cuda()
+        xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
         ys = self.forward(xs)
+        print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
         for (i, j) in zip(xs.cpu().tolist(), ys.cpu().tolist()):
             print(i, j)
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
+        plt.close()
 
 
 # gaussian diffusion trainer class
@@ -676,13 +688,16 @@ class GaussianDiffusion(nn.Module):
         # print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
 
         diffusion_loss = F.mse_loss(v, v_target)
-        loss = diffusion_loss - log_dy_dx
-        print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
+        loss = diffusion_loss - log_dy_dx + self.monotonic_net.l2_regularisation()
+        print("Diffusion loss and -log|dy/dx| and l2_regularisation:", diffusion_loss.item(), -log_dy_dx.item(), self.monotonic_net.l2_regularisation().item())
 
         return loss
 
     def forward(self, x):
         # x = normalize_img(x)
+
+        x = 2 * ((x - PR_MIN) / (PR_MAX - PR_MIN)) # In the range [0, 2]
+
         return self.p_losses(x)
 
 
