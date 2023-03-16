@@ -701,7 +701,7 @@ class GaussianDiffusion(nn.Module):
         y = y.reshape(*x_shape)
         y = self.monotonic_net.normalise(y)
 
-        log_dy_dx = self.monotonic_net.log_dy_dx(x, y)
+        log_dy_dx = self.monotonic_net.dy_dx(x, y)
 
         times = torch.zeros(b).uniform_(0, 1).cuda()
         # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
