@@ -687,13 +687,15 @@ class GaussianDiffusion(nn.Module):
     def p_losses(self, x):
         b = x.shape[0]
 
+        x[x < 0.01] = 0
+
         x.requires_grad = True
         x_shape = x.shape
         y = self.monotonic_net(x.reshape(*x_shape, 1))
         y = y.reshape(*x_shape)
         y = self.monotonic_net.normalise(y)
 
-        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y)).mean()
+        log_dy_dx = torch.log(self.monotonic_net.dy_dx(x, y).mean())
 
         times = torch.zeros(b).uniform_(0, 1).cuda()
         # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
@@ -709,7 +711,7 @@ class GaussianDiffusion(nn.Module):
         # print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
 
         diffusion_loss = F.mse_loss(v, v_target)
-        loss = diffusion_loss - log_dy_dx
+        loss = diffusion_loss - 0.025 * log_dy_dx
         self.monotonic_net.clip_grads()
         print("Diffusion loss and log|dy/dx|:", diffusion_loss.item(), log_dy_dx.item())
 
