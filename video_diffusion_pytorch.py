@@ -491,77 +491,48 @@ class MonotonicNet(nn.Module):
         super().__init__()
         self.act = nn.Tanh()
 
-        self.layer_1 = nn.Linear(1, 128)
-        self.layer_2_1 = nn.Linear(128, 128)
-        self.layer_2_2 = nn.Linear(128, 128)
-        self.layer_3 = nn.Linear(128, 1)
+        self.layer_1 = nn.Linear(1, 16)
+        self.layer_2 = nn.Linear(16, 16)
+        self.layer_3 = nn.Linear(16, 1)
 
-        self.act = nn.Tanh()
-
-        nn.init.xavier_normal_(self.layer_1.weight)
-        nn.init.xavier_normal_(self.layer_2_1.weight)
-        nn.init.xavier_normal_(self.layer_2_2.weight)
-        nn.init.xavier_normal_(self.layer_3.weight)
-        self.layer_1.weight.data = torch.abs(self.layer_1.weight.data)
-        self.layer_2_1.weight.data = torch.abs(self.layer_2_1.weight.data)
-        self.layer_2_2.weight.data = torch.abs(self.layer_2_2.weight.data)
-        self.layer_3.weight.data = torch.abs(self.layer_3.weight.data)
+        nn.init.xavier_uniform_(self.layer_1.weight)
+        nn.init.xavier_uniform_(self.layer_2.weight)
+        nn.init.xavier_uniform_(self.layer_3.weight)
 
         self.enforce_monotonicity()
 
-    def forward(self, x):
+    def forward(self, x, identity_weight = 0.1):
+        identity = x
         x = self.layer_1(x)
         x = self.act(x)
-
-        x_1 = self.layer_2_1(x)
-        x_1 = self.act(x_1)
-
-        x_2 = self.layer_2_2(x)
-        x_2 = self.act(x_2)
-        x_2 = torch.exp(x_2) - 1
-        x_2 = torch.exp(x_2) - 1
-
-        x = x_1 + x_2
-
+        x = self.layer_2(x)
+        x = self.act(x)
         x = self.layer_3(x)
-    
+        x = self.act(x)
+        x = x + identity_weight * identity
+        x = self.act(x)
         return x
+    
+    def normalise(self, y):
+        y_max = self(torch.tensor([2.]).cuda()).item()
+        y_min = self(torch.tensor([0.]).cuda()).item()
+        return 2 * ((y - y_min) / (y_max - y_min)) - 1
 
     def enforce_monotonicity(self):
-        for p in self.parameters():
-            p.data.clamp_(min=0)
-
-    def normalise(self, y):
-        y_max = self(torch.tensor([PR_MAX]).cuda()).item()
-        y_min = self(torch.tensor([PR_MIN]).cuda()).item()
-        y_normalised = 2 * ((y - y_min) / (y_max - y_min)) - 1
-        y_normalised = torch.clamp(y_normalised, -1, 1)
-        return y_normalised
-
-    def unnormalise(self, y):
-        y_max = self(torch.tensor([PR_MAX]).cuda()).item()
-        y_min = self(torch.tensor([PR_MIN]).cuda()).item()
-        y_unnormalised = (y + 1) / 2 * (y_max - y_min) + y_min
-        y_unnormalised = torch.clamp(y_unnormalised, PR_MIN, PR_MAX)
-        return y_unnormalised
+        for name, param in self.named_parameters():
+            if 'bias' not in name:
+                param.data.clamp_(min=0)
 
     def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
-        dy_dx_mean = torch.mean(dy_dx, dim=(1, 2, 3, 4))
-        log_dy_dx = torch.log(torch.abs(dy_dx_mean))
-        return torch.mean(log_dy_dx)
-    
-    def l2_regularisation(self, l2_reg_strength = 1):
-        l2_reg_strength = 1
-        l2_reg_loss = 0.
-        for p in self.parameters():
-            l2_reg_loss += torch.norm(p, p=2)
-        return l2_reg_loss * l2_reg_strength
+        log_dy_dx = torch.mean(torch.log(dy_dx))
+        return log_dy_dx
 
     @torch.inference_mode()
     def plot(self):
         xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
-        ys = self.forward(xs)
+        xs_normalised = 2 * ((xs - PR_MIN) / (PR_MAX - PR_MIN))
+        ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
         for (i, j) in zip(xs.cpu().tolist(), ys.cpu().tolist()):
@@ -664,8 +635,6 @@ class GaussianDiffusion(nn.Module):
     def p_losses(self, x):
         b = x.shape[0]
 
-        # x[x < 0.01] = 0
-
         x.requires_grad = True
         x_shape = x.shape
         y = self.monotonic_net(x.reshape(*x_shape, 1))
@@ -674,8 +643,7 @@ class GaussianDiffusion(nn.Module):
 
         log_dy_dx = self.monotonic_net.log_dy_dx(x, y)
 
-        times = torch.zeros(b).uniform_(0, 1).cuda()
-        # times = torch.randint(0, self.num_timesteps, (b,)).cuda().long() / self.num_timesteps
+        times = torch.zeros(b).uniform_(0, 1).cuda() # TODO: Maybe implement the approach outlined in VDM paper
 
         lambda_t = self.log_snr_schedule_cosine(times)
         noise = torch.randn_like(x)
@@ -685,18 +653,14 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         v_target = alpha_t * noise - sigma_t * y
 
-        # print("unnormalised min max", self.monotonic_net(torch.tensor([PR_MIN]).cuda()).item(), self.monotonic_net(torch.tensor([PR_MAX]).cuda()).item())
-
         diffusion_loss = F.mse_loss(v, v_target)
-        loss = diffusion_loss - log_dy_dx + self.monotonic_net.l2_regularisation()
-        print("Diffusion loss and -log|dy/dx| and l2_regularisation:", diffusion_loss.item(), -log_dy_dx.item(), self.monotonic_net.l2_regularisation().item())
+        loss = diffusion_loss - log_dy_dx
+        print("Diffusion loss and -log|dy/dx|", diffusion_loss.item(), -log_dy_dx.item())
 
         return loss
 
     def forward(self, x):
-        # x = normalize_img(x)
-
-        x = 2 * ((x - PR_MIN) / (PR_MAX - PR_MIN)) # In the range [0, 2]
+        x = 2 * ((x - PR_MIN) / (PR_MAX - PR_MIN)) # In the range [0, 2] just for better interpretability of log|dy / dx|
 
         return self.p_losses(x)
 
