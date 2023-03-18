@@ -501,16 +501,17 @@ class MonotonicNet(nn.Module):
 
         self.enforce_monotonicity()
 
-    def forward(self, x, identity_weight = 0.1):
+    def forward(self, x):
         identity = x
+
         x = self.layer_1(x)
         x = self.act(x)
         x = self.layer_2(x)
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-        x = x + identity_weight * identity
-        x = self.act(x)
+        x = x + 0.01 * identity
+
         return x
     
     def normalise(self, y):
@@ -525,8 +526,9 @@ class MonotonicNet(nn.Module):
 
     def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
-        log_dy_dx = torch.mean(torch.log(dy_dx))
-        return log_dy_dx
+        log_dy_dx = torch.log(dy_dx)
+        log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
+        return log_dy_dx.mean()
 
     @torch.inference_mode()
     def plot(self):
@@ -966,9 +968,6 @@ class Trainer(object):
             self.scaler.update()
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
-
-            if self.step % 100 == 0:
-                self.model.monotonic_net.plot() # TODO: Remove this
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
