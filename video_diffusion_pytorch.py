@@ -532,13 +532,12 @@ class MonotonicNet(nn.Module):
 
     @torch.inference_mode()
     def plot(self):
-        xs = torch.linspace(PR_MIN, PR_MAX, 1000).reshape(-1, 1).cuda()
+        xs = torch.linspace(PR_MIN, PR_MAX, 100000).reshape(-1, 1).cuda()
         xs_normalised = 2 * ((xs - PR_MIN) / (PR_MAX - PR_MIN))
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        for (i, j) in zip(xs.cpu().tolist(), ys.cpu().tolist()):
-            print(i, j)
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
