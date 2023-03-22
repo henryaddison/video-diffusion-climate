@@ -510,7 +510,7 @@ class MonotonicNet(nn.Module):
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-        x = x + 0.01 * identity
+        x = x + 0.1 * identity
 
         return x
     
@@ -537,7 +537,7 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_0.1.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
