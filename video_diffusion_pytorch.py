@@ -561,6 +561,7 @@ class GaussianDiffusion(nn.Module):
         self.num_frames = num_frames
         self.num_timesteps = num_timesteps
         self.monotonic_net = MonotonicNet()
+        self.omega_r = 100000 # Reconstruction-guided sampling
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -15, log_snr_max = 15):
         b = t.shape[0]
@@ -591,15 +592,30 @@ class GaussianDiffusion(nn.Module):
         
         return mu_st, sigma_st
 
-    def p_mean_variance(self, z_t, lambda_s, lambda_t):
+    def p_mean_variance(self, z_t, lambda_s, lambda_t, x_a = None, indices_a = None):
+        if x_a is not None: # Reconstruction-guided sampling
+            indices_b = [i for i in range(0, self.num_frames) if i not in indices_a]
+            z_t = z_t.detach()
+            z_t_b = z_t[:, :, indices_b]
+            z_t_b.requires_grad = True
+            z_t[:, :, indices_b] = z_t_b
+
         v_hat_t = self.unet(z_t, lambda_t.reshape(-1))
         x_hat = self.predict_x_hat(z_t, v_hat_t, lambda_t)
+
+        if x_a is not None: # Reconstruction-guided sampling
+            alpha_t, _ = self.log_snr_to_alpha_sigma(lambda_t)
+            x_hat_a = x_hat[:, :, indices_a]
+            error = F.mse_loss(x_a, x_hat_a)
+            grad = torch.autograd.grad(outputs = error, inputs = z_t_b)[0]
+            x_hat[:, :, indices_b] -= ((self.omega_r * alpha_t) / 2) * grad
+
         x_hat = x_hat.clamp(-1, 1)
         mu_st, sigma_st = self.q_posterior(z_t, x_hat, lambda_s, lambda_t)
         return mu_st, sigma_st
 
-    def p_sample(self, z_t, lambda_s, lambda_t, is_final_step):
-        mu_st, sigma_st = self.p_mean_variance(z_t, lambda_s, lambda_t)
+    def p_sample(self, z_t, lambda_s, lambda_t, is_final_step, x_a = None, indices_a = None):
+        mu_st, sigma_st = self.p_mean_variance(z_t, lambda_s, lambda_t, x_a = x_a, indices_a = indices_a)
         noise = torch.randn_like(z_t)
         
         return mu_st + sigma_st * noise * (1 - is_final_step)
@@ -618,7 +634,6 @@ class GaussianDiffusion(nn.Module):
         x = z_t.clamp_(-1, 1)
 
         return x
-        # return unnormalize_img(x)
 
     @torch.inference_mode()
     def sample(self, batch_size = 16):
@@ -626,13 +641,33 @@ class GaussianDiffusion(nn.Module):
 
         samples = self.p_sample_loop((batch_size, 1, self.num_frames, self.image_size, self.image_size))
         return samples
-        # return torch.square(samples)
+
+    def sample_recon_guidance(self, x_a, indices_a):
+        b = x_a.shape[0]
+        z_t = torch.randn((b, 1, self.num_frames, self.image_size, self.image_size)).cuda()
+
+        for i in tqdm(reversed(range(1, self.num_timesteps + 1)), desc='sampling loop time step', total=self.num_timesteps):
+            s = torch.full((b,), (i - 1) / self.num_timesteps).cuda()
+            t = torch.full((b,), i / self.num_timesteps).cuda()
+            lambda_s = self.log_snr_schedule_cosine(s)
+            lambda_t = self.log_snr_schedule_cosine(t)
+            z_t = self.p_sample(z_t, lambda_s, lambda_t, is_final_step = i == 1, x_a = x_a, indices_a = indices_a)
+
+            z_t[:, :, indices_a] = self.q_sample_recon_guidance(z_t[:, :, indices_a], x_a, lambda_s, lambda_t)
+
+        z_t[:, :, indices_a] = x_a
+
+        return z_t
+
+    def q_sample_recon_guidance(self, z_t_a, x_a, lambda_s, lambda_t):
+        noise = torch.randn_like(z_t_a)
+        mu_st, sigma_st = self.q_posterior(z_t_a, x_a, lambda_s, lambda_t)
+        return mu_st + sigma_st * noise
 
     def q_sample(self, x, lambda_t, noise):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         return alpha_t * x + sigma_t * noise
         
-
     def p_losses(self, x):
         b = x.shape[0]
 
@@ -665,190 +700,6 @@ class GaussianDiffusion(nn.Module):
 
         return self.p_losses(x)
 
-
-
-
-# def extract(a, t, x_shape):
-#     b, *_ = t.shape
-#     out = a.gather(-1, t)
-#     return out.reshape(b, *((1,) * (len(x_shape) - 1)))
-
-# def cosine_beta_schedule(timesteps, s = 0.008):
-#     """
-#     cosine schedule
-#     as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
-#     """
-#     steps = timesteps + 1
-#     x = torch.linspace(0, timesteps, steps, dtype = torch.float64)
-#     alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * torch.pi * 0.5) ** 2
-#     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-#     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-#     return torch.clip(betas, 0, 0.9999)
-
-# class GaussianDiffusion(nn.Module):
-#     def __init__(
-#         self,
-#         denoise_fn,
-#         *,
-#         image_size,
-#         num_frames,
-#         timesteps = 1000,
-#     ):
-#         super().__init__()
-#         self.image_size = image_size
-#         self.num_frames = num_frames
-#         self.denoise_fn = denoise_fn
-
-#         betas = cosine_beta_schedule(timesteps)
-
-#         alphas = 1. - betas
-#         alphas_cumprod = torch.cumprod(alphas, axis=0)
-#         alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.)
-
-#         timesteps, = betas.shape
-#         self.num_timesteps = int(timesteps)
-
-#         # register buffer helper function that casts float64 to float32
-
-#         register_buffer = lambda name, val: self.register_buffer(name, val.to(torch.float32))
-
-#         register_buffer('betas', betas)
-#         register_buffer('alphas_cumprod', alphas_cumprod)
-#         register_buffer('alphas_cumprod_prev', alphas_cumprod_prev)
-
-#         # calculations for diffusion q(x_t | x_{t-1}) and others
-
-#         register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
-#         register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
-#         register_buffer('log_one_minus_alphas_cumprod', torch.log(1. - alphas_cumprod))
-#         register_buffer('sqrt_recip_alphas_cumprod', torch.sqrt(1. / alphas_cumprod))
-#         register_buffer('sqrt_recipm1_alphas_cumprod', torch.sqrt(1. / alphas_cumprod - 1))
-
-#         # calculations for posterior q(x_{t-1} | x_t, x_0)
-
-#         posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
-
-#         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
-
-#         register_buffer('posterior_variance', posterior_variance)
-
-#         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
-
-#         register_buffer('posterior_log_variance_clipped', torch.log(posterior_variance.clamp(min =1e-20)))
-#         register_buffer('posterior_mean_coef1', betas * torch.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod))
-#         register_buffer('posterior_mean_coef2', (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod))
-
-#     def predict_start_from_noise(self, x_t, t, noise):
-#         return (
-#             extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
-#             extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
-#         )
-
-#     def q_posterior(self, x_start, x_t, t):
-#         posterior_mean = (
-#             extract(self.posterior_mean_coef1, t, x_t.shape) * x_start +
-#             extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
-#         )
-#         posterior_variance = extract(self.posterior_variance, t, x_t.shape)
-#         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
-#         return posterior_mean, posterior_variance, posterior_log_variance_clipped
-
-#     def p_mean_variance(self, x_t, t, clip_denoised: bool, x_a = None, indices_a = None):
-#         if x_a is not None:
-#             indices_b = [i for i in range(0, self.num_frames) if i not in indices_a]
-#             x_t = x_t.detach()
-#             x_t_b = x_t[:, :, indices_b]
-#             x_t_b.requires_grad = True
-#             x_t[:, :, indices_b] = x_t_b
-
-#         x_0_hat = self.predict_start_from_noise(x_t, t=t, noise = self.denoise_fn.forward(x_t, t))
-
-#         if x_a is not None:
-#             omega_t = 100
-#             alpha_t = extract(self.sqrt_alphas_cumprod, t, (1, 1)).item()
-#             x_0_hat_a = x_0_hat[:, :, indices_a]
-#             error = F.mse_loss(x_a, x_0_hat_a)
-#             grad = torch.autograd.grad(outputs = error, inputs = x_t_b)[0]
-#             x_0_hat[:, :, indices_b] -= ((omega_t * alpha_t) / 2) * grad
-
-#         if clip_denoised:
-#             x_0_hat = x_0_hat.clamp(-1, 1)
-
-#         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_0_hat, x_t=x_t, t=t)
-#         return model_mean, posterior_variance, posterior_log_variance
-
-#     def p_sample(self, x, t, clip_denoised = True, x_a = None, indices_a = None):
-#         b, *_, device = *x.shape, x.device
-#         model_mean, _, model_log_variance = self.p_mean_variance(x_t = x, t = t, clip_denoised = clip_denoised, x_a = x_a, indices_a = indices_a)
-#         noise = torch.randn_like(x)
-#         # no noise when t == 0
-#         nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
-#         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
-
-#     def p_sample_loop(self, shape):
-#         device = self.betas.device
-
-#         b = shape[0]
-#         img = torch.randn(shape, device=device)
-
-#         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-#             img = self.p_sample(img, torch.full((b,), i, device=device, dtype=torch.long))
-
-#         return unnormalize_img(img)
-
-#     @torch.inference_mode()
-#     def sample(self, batch_size = 16):
-#         image_size = self.image_size
-#         num_frames = self.num_frames
-#         samples = self.p_sample_loop((batch_size, 1, num_frames, image_size, image_size))
-#         return torch.square(samples)
-
-#     def sample_cond(self, x_a, indices_a):
-#         x_a = normalize_img(torch.sqrt(x_a))
-#         x_t = torch.randn((1, 1, self.num_frames, self.image_size, self.image_size), device=x_a.device)
-
-#         for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
-#             t = torch.full((1,), i, device=x_a.device, dtype=torch.long)
-#             x_t = self.p_sample(x_t, t, x_a = x_a, indices_a=indices_a)
-#             x_t[:, :, indices_a] = self.q_sample(x_start=x_a, t=t)
-
-#         x_t[:, :, indices_a] = x_a
-#         x_t = torch.square(unnormalize_img(x_t.detach()))
-
-#         return x_t
-
-#     def q_sample(self, x_start, t, noise = None):
-#         noise = default(noise, lambda: torch.randn_like(x_start))
-
-#         return (
-#             extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-#             extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
-#         )
-
-#     def p_losses(self, x_start, t, noise = None, **kwargs):
-#         b, c, f, h, w, device = *x_start.shape, x_start.device
-#         noise = default(noise, lambda: torch.randn_like(x_start))
-
-#         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-
-#         x_recon = self.denoise_fn(x_noisy, t, **kwargs)
-
-#         loss = F.mse_loss(noise, x_recon)
-
-#         return loss
-
-#     def forward(self, x, *args, **kwargs):
-#         b, device, img_size, = x.shape[0], x.device, self.image_size
-#         check_shape(x, 'b c f h w', c = 1, f = self.num_frames, h = img_size, w = img_size)
-#         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
-#         x = normalize_img(x)
-#         return self.p_losses(x, t, *args, **kwargs)
-
-# def normalize_img(t):
-#     return 2 * ((t - PR_MIN) / (PR_MAX - PR_MIN)) - 1
-
-# def unnormalize_img(t):
-#     return (t + 1) / 2 * (PR_MAX - PR_MIN) + PR_MIN
 
 class Dataset(data.Dataset):
     def __init__(
