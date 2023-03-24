@@ -524,10 +524,17 @@ class MonotonicNet(nn.Module):
             if 'bias' not in name:
                 param.data.clamp_(min=0)
 
-    def log_dy_dx(self, x, y):
-        dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
+    def log_dy_dx(self, x, y, lambda_t):
+        dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, creates_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
         log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
+
+        #TODO: Tidy this up
+        t_min = math.atan(math.exp(-0.5 * 15))
+        t_max = math.atan(math.exp(-0.5 * -15))
+        w = (1 / 2) * (1 / (t_max - t_min)) * torch.exp(-lambda_t / 2)
+        log_dy_dx *= w
+
         return log_dy_dx.mean()
 
     @torch.inference_mode()
@@ -537,7 +544,7 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_0.1.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_weighted.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
@@ -677,11 +684,12 @@ class GaussianDiffusion(nn.Module):
         y = y.reshape(*x_shape)
         y = self.monotonic_net.normalise(y)
 
-        log_dy_dx = self.monotonic_net.log_dy_dx(x, y)
-
         times = torch.zeros(b).uniform_(0, 1).cuda() # TODO: Maybe implement the approach outlined in VDM paper
 
         lambda_t = self.log_snr_schedule_cosine(times)
+
+        log_dy_dx = self.monotonic_net.log_dy_dx(x, y, lambda_t)
+
         noise = torch.randn_like(x)
         y_noisy = self.q_sample(y, lambda_t, noise)
         v = self.unet(y_noisy, lambda_t.reshape(-1))

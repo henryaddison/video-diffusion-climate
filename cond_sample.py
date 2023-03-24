@@ -76,19 +76,28 @@ def inverse_tensor(y_tensor):
 if torch.cuda.is_available():
     diffusion = diffusion.cuda()
 
-indices_a = [0, 1, 2, 3, 4]
-indices_b = [5, 6, 7, 8, 9]
-offset = 5
+samples = torch.zeros(0, 1, 100, 64, 64)
 
-sample = diffusion.sample(batch_size = 16).cpu()
-print(sample.shape)
-for _ in range(18):
-    x_a = sample[:, :, [i + offset for i in indices_a]].cuda()
-    x_cond_sample=diffusion.sample_recon_guidance(x_a, indices_a).cpu()
-    sample = torch.cat([sample, x_cond_sample[:, :, indices_b]], dim = 2)
+
+BATCH_SIZE = 16
+LENGTH = 100
+
+# Since recon-guidance can only take a match batch size of 16, we need to multiple iterations
+for _ in range(10):
+    indices_a = [0, 1, 2, 3, 4]
+    indices_b = [5, 6, 7, 8, 9]
+    offset = 5
+
+    sample = diffusion.sample(batch_size = BATCH_SIZE).cpu()
     print(sample.shape)
-    offset += 5
+    for _ in range((LENGTH - 10) // 5):
+        x_a = sample[:, :, [i + offset for i in indices_a]].cuda()
+        x_cond_sample=diffusion.sample_recon_guidance(x_a, indices_a).cpu()
+        sample = torch.cat([sample, x_cond_sample[:, :, indices_b]], dim = 2)
+        print(sample.shape)
+        offset += 5
 
-sample = inverse_tensor(sample).reshape(*sample.shape)
-torch.save(sample, f"/user/home/cj19328/cond_sample/long_video.pt")
-print("Done!")
+    sample = inverse_tensor(sample).reshape(BATCH_SIZE, 1, LENGTH, 64, 64)
+    samples = torch.cat([samples, sample])
+    torch.save(samples, f"/user/home/cj19328/cond_sample/long_video.pt")
+    print("Done!")
