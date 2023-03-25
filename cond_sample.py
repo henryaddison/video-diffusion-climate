@@ -2,7 +2,7 @@ import torch
 from video_diffusion_pytorch import Unet3D, GaussianDiffusion, num_to_groups
 import xarray as xr
 
-MILESTONE = 139
+MILESTONE = 209
 
 model = Unet3D(
     dim=64,

@@ -524,17 +524,10 @@ class MonotonicNet(nn.Module):
             if 'bias' not in name:
                 param.data.clamp_(min=0)
 
-    def log_dy_dx(self, x, y, lambda_t):
+    def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, creates_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
         log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
-
-        #TODO: Tidy this up
-        t_min = math.atan(math.exp(-0.5 * 15))
-        t_max = math.atan(math.exp(-0.5 * -15))
-        w = (1 / 2) * (1 / (t_max - t_min)) * torch.exp(-lambda_t / 2)
-        log_dy_dx *= w
-
         return log_dy_dx.mean()
 
     @torch.inference_mode()
@@ -684,11 +677,10 @@ class GaussianDiffusion(nn.Module):
         y = y.reshape(*x_shape)
         y = self.monotonic_net.normalise(y)
 
+        log_dy_dx = self.monotonic_net.log_dy_dx(x, y)
+
         times = torch.zeros(b).uniform_(0, 1).cuda() # TODO: Maybe implement the approach outlined in VDM paper
-
         lambda_t = self.log_snr_schedule_cosine(times)
-
-        log_dy_dx = self.monotonic_net.log_dy_dx(x, y, lambda_t)
 
         noise = torch.randn_like(x)
         y_noisy = self.q_sample(y, lambda_t, noise)
