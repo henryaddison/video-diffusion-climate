@@ -245,7 +245,52 @@
 \section{Diffusion Models}
 \label{sec:background_diffusion}
 
-Diffusion models are latent variable models with latents $\mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}$.
+Diffusion models are 
+
+Given observed datapoints $\mathbf{x}$, the goal of a generative model is to learn to model its true data distribution $p(\mathbf{x})$.
+
+\subsection{Forward Diffusion Process}
+\label{sec:background_diffusion_forward}
+
+The \textit{forward process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
+\begin{align}
+      \mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}
+\end{align}
+
+The forward process forms a conditional joint distribution $q(\mathbf{z}|\mathbf{x})$, whose marginal distributions of latent variables $\mathbf{z}_t$ given $\mathbf{x}\sim p(\mathbf{x})$ are given by:
+\begin{align}
+      q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t;\alpha_t\mathbf{x},\sigma_t^2\mathbf{I}\right)
+      \label{eq:q_z_t_given_x}
+\end{align}
+where $\alpha_t$ and $\sigma_t$ are strictly positive scalar-valued functions of $t$.
+
+A notable aspect of the forward process is that the joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
+\begin{align}
+      q(\mathbf{z}_t|\mathbf{z}_s,\mathbf{z}_r)&=q(\mathbf{z}_t|\mathbf{z}_s)=\mathcal{N}\left(\mathbf{z}_t; \alpha_{t|s}\mathbf{z}_s, \sigma_{t|s}^2\mathbf{I}\right)
+\end{align}
+where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha_{t|s}^2\sigma_s^2$. A full derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$ is given in Appendix \ref{appx:diffusion_q_z_t_given_z_s}.
+
+\subsection{Reverse Generative Model}
+\label{sec:background_diffusion_reverse}
+
+The generative model is a learned hierarchical model that matches the forward process running in reverse-time: we sequentially generate latent variables $\mathbf{z}_t$ starting from $t=1$ and working backwards to $t=0$.
+
+Assuming our diffusion model is variance preserving (i.e. $\alpha_t=\sqrt{1-\sigma_t^2}$) and $\alpha_1\approx 0$, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
+\begin{align}
+      p(\mathbf{z}_1)\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
+\end{align}
+
+
+
+\subsection{Noise Schedule}
+\label{sec:background_diffusion_noise_schedule}
+
+We formalise the notion that $\mathbf{z}_t$ is increasingly noisy by defining a log signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$ as a strictly monotonically decreasing function of time $t\in[0, 1]$.
+\begin{align}
+      \lambda(t) = \log\left( \frac{\alpha_t^2}{\sigma_t^2}\right)
+\end{align}
+
+The \textit{noise schedule} is a critical aspect of the diffusion model. It maps the time variable $t\in[0, 1]$ to a log-signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$.
 
 \section{Climate Simulations}
 \label{sec:background_climate}
@@ -267,7 +312,7 @@ Diffusion models are latent variable models with latents $\mathbf{z}=\{\mathbf{z
 %
 % We would recommend using BiBTeX, since it guarantees a consistent referencing style 
 % and since many sites (such as dblp) provide references in BiBTeX format. 
-% However, note that by default, BiBTeX will ignore capital letters in article titles 
+% However, note that by default, BiBTeX will ixwgnore capital letters in article titles 
 % to ensure consistency of style. This can lead to e.g. "NP-completeness" becoming
 % "np-completeness". To avoid this, make sure any capital letters you want to preserve
 % are enclosed in braces in the .bib, e.g. "{NP}-completeness".
@@ -284,27 +329,36 @@ Diffusion models are latent variable models with latents $\mathbf{z}=\{\mathbf{z
 
 \appendix
 
-\chapter{An Example Appendix}
-\label{appx:example}
+\chapter{Diffusion Models}
+\label{appx:diffusion}
 
-Content which is not central to, but may enhance the dissertation can be 
-included in one or more appendices; examples include, but are not limited
-to
+\section{Derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$}
+\label{appx:diffusion_q_z_t_given_z_s}
 
-\begin{itemize}
-\item lengthy mathematical proofs, numerical or graphical results which 
-      are summarised in the main body,
-\item sample or example calculations, 
-      and
-\item results of user studies or questionnaires.
-\end{itemize}
-
-\noindent
-Note that in line with most research conferences, the marking panel is not
-obliged to read such appendices. The point of including them is to serve as
-an additional reference if and only if the marker needs it in order to check
-something in the main text. For example, the marker might check a program listing 
-in an appendix if they think the description in the main dissertation is ambiguous.
+From Equation \ref{eq:q_z_t_given_x}, we know $q(\mathbf{z}_t|\mathbf{x})$ is an isotropic Gaussian probability density function. As such, we can sample $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ by sampling $\boldsymbol\epsilon_t\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ from the multivariate standard Gaussian distribution and computing:
+\begin{align}
+      \mathbf{z}_t&=\alpha_t\mathbf{x}+\sigma_t\boldsymbol\epsilon_t
+\end{align}
+With some algebraic manipulation, we can show that:
+\begin{align}
+      \mathbf{z}_t&=\alpha_t\mathbf{x}+\sqrt{\sigma_t^2}\boldsymbol\epsilon_t\\
+      &=\alpha_t\mathbf{x}+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2+\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t\\
+      &=\alpha_t\mathbf{x}+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2+\left(\frac{\alpha_t}{\alpha_s}\sigma_s\right)^2}\boldsymbol\epsilon_t
+\end{align}
+The sum of two independent Gaussian random variables with mean $\mu_1$ and $\mu_2$ and variance $\sigma_1^2$ and $\sigma_2^2$ is a Gaussian random variable with mean $\mu_1+\mu_2$ and variance $\sigma_1^2+\sigma_2^2$. As such, we can manipulate the above equation further to show that:
+\begin{align}
+      \mathbf{z}_t&=\alpha_t\mathbf{x}+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t^*+\frac{\alpha_t}{\alpha_s}\sigma_s\boldsymbol\epsilon_s\\
+      &=\alpha_t\mathbf{x}+\frac{\alpha_t}{\alpha_s}\sigma_s\boldsymbol\epsilon_s+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t^*\\
+      &=\frac{\alpha_s}{\alpha_s}\alpha_t\mathbf{x}+\frac{\alpha_t}{\alpha_s}\sigma_s\boldsymbol\epsilon_s+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t^*\\
+      &=\frac{\alpha_t}{\alpha_s}(\alpha_s\mathbf{x}+\sigma_s\boldsymbol\epsilon_s)+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t^*\\
+\end{align}
+where $\boldsymbol\epsilon_t^*, \boldsymbol\epsilon_s\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ are similarly both sampled from the multivariate standard Gaussian distribution. We can substitute $\mathbf{z}_s=\alpha_s\mathbf{x}+\sigma_s\boldsymbol\epsilon_s$ into the above equation to show that:
+\begin{align}
+      \mathbf{z}_t&=\frac{\alpha_t}{\alpha_s}\mathbf{z}_s+\sqrt{\sigma_t^2-\frac{\alpha_t^2}{\alpha_s^2}\sigma_s^2}\boldsymbol\epsilon_t^*\\
+      &=\alpha_{t|s}\mathbf{z}_s+\sigma_{t|s}\boldsymbol\epsilon_t^*\\
+      &\sim\mathcal{N}\left(\mathbf{z}_t;\alpha_{t|s}\mathbf{z}_s,\sigma_{t|s}^2\mathbf{I}\right)
+\end{align}
+The subscript $t|s$ relates to the fact that $\alpha_{t|s}$ and $\sigma_{t|s}$ define the parameters of the Gaussian probability density function $q(\mathbf{z}_t|\mathbf{z}_s)$.
 
 % =============================================================================
 

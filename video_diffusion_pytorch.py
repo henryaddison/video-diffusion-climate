@@ -510,7 +510,7 @@ class MonotonicNet(nn.Module):
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-        x = x + 0.1 * identity
+        x = x + 0.05 * identity
 
         return x
     
@@ -525,7 +525,7 @@ class MonotonicNet(nn.Module):
                 param.data.clamp_(min=0)
 
     def log_dy_dx(self, x, y):
-        dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, creates_graph=True)[0]
+        dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
         log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
         return log_dy_dx.mean()
