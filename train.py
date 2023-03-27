@@ -27,7 +27,7 @@ trainer = Trainer(
     gradient_accumulate_every=2,
     ema_decay=0.995,
     amp=True,
-    results_folder='/user/work/cj19328/results_transform_0.05'
+    results_folder='/user/work/cj19328/results_transform_0.05_lambda_30'
 )
 
 # trainer.load(37)
