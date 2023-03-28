@@ -252,19 +252,16 @@ Given observed datapoints $\mathbf{x}$, the goal of a generative model is to lea
 \subsection{Forward Diffusion Process}
 \label{sec:background_diffusion_forward}
 
-The \textit{forward process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
+The \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
 \begin{align}
       \mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-
 The forward process forms a conditional joint distribution $q(\mathbf{z}|\mathbf{x})$, whose marginal distributions of latent variables $\mathbf{z}_t$ given $\mathbf{x}\sim p(\mathbf{x})$ are given by:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t;\alpha_t\mathbf{x},\sigma_t^2\mathbf{I}\right)
       \label{eq:q_z_t_given_x}
 \end{align}
-where $\alpha_t$ and $\sigma_t$ are strictly positive scalar-valued functions of $t$.
-
-A notable aspect of the forward process is that the joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
+where $\alpha_t$ and $\sigma_t$ are strictly positive scalar-valued functions of $t$. The joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{z}_s,\mathbf{z}_r)&=q(\mathbf{z}_t|\mathbf{z}_s)=\mathcal{N}\left(\mathbf{z}_t; \alpha_{t|s}\mathbf{z}_s, \sigma_{t|s}^2\mathbf{I}\right)
 \end{align}
@@ -296,17 +293,16 @@ We compute $\alpha_t$ and $\sigma_t$ from $\lambda_t$ via the following equation
 where $S$ is the sigmoid function. A full derivation of $f_\lambda$ is given in Appendix \ref{appx:diffusion_cosine_noise_schedule}.
 
 
-\subsection{Reverse Generative Model}
+\subsection{Generative Model}
 \label{sec:background_diffusion_reverse}
 
-The generative model is a learned hierarchical model that matches the forward process running in reverse-time: we sequentially generate latent variables $\mathbf{z}_t$ starting from $t=1$ and working backwards to $t=0$.
+The \textit{generative model} is a learned hierarchical model that matches the forward process running in reverse-time: we sequentially generate latent variables $\mathbf{z}_t$ starting from $t=1$ and working backwards to $t=0$.
 
-Assuming our diffusion model is variance preserving (i.e. $\alpha_t^2=1-\sigma_t^2$) and sufficiently small $\lambda_{\min}$, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
+In this work, our diffusion model is variance preserving (i.e. $\alpha_t^2=1-\sigma_t^2$) and $\lambda_{\min}$ is sufficiently small. As such, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
 \begin{align}
       p(\mathbf{z}_1)\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
 \end{align}
-
-In this work, to sequentially generate the latent variables, we use the discrete-time ancestral sampler \cite{DDPM_Ho}. We define:
+Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1; \mathbf{0}, \mathbf{I})$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
 \begin{align}
       p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
       &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
@@ -316,13 +312,26 @@ where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate
       \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
       \tilde{\sigma}_{s|t}^2&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
 \end{align}
-
-For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p(\mathbf{z}_0)$ is practically equivalent to learning a model $p(\mathbf{x})$.
+For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p(\mathbf{z}_0)$ is practically equivalent to learning a model $p(\mathbf{x})$. 
 
 \subsection{Objective Function}
 \label{sec:background_diffusion_objective}
 
-Diffusion models in the literature are optimised with various objectives that are special cases of a weighted loss \cite{Understanding_Diffusion_Objective_Kingma}.
+Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} discovered that diffusion models in the broader literature are optimised with various objectives that are almost all special cases of a weighted loss  per datapoint $\mathbf{x}$, which is defined as:
+\begin{align}
+      \mathcal{L}_w=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}'(\lambda)d\lambda
+\end{align}
+where
+\begin{align}
+      \mathcal{L}(\lambda)&=D_{KL}(q(\mathbf{z}_t,...,\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z}_t,...,\mathbf{z}_1))\\
+      \mathcal{L}'(\lambda)&=\frac{d}{d\lambda}\mathcal{L}=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]
+\end{align}
+and $w(\lambda)$ is a weighting function.
+
+In this work, we use the $\mathbf{v}$-parameterisation, wherein
+\begin{align}
+      \mathbf{v} = 
+\end{align}
 
 \subsection{Reconstruction-Guided Sampling}
 \label{sec:background_diffusion_reconstruction_guided_sampling}

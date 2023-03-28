@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name climate_no_sqrt
+#SBATCH --job-name climate_experimental
 #SBATCH --nodes 1
 #SBATCH --gres gpu:A100:1
 #SBATCH --mem 124G
 #SBATCH --partition cnu
 #SBATCH --account COSC020762
-#SBATCH --output slurm_sample_no_sqrt.out
+#SBATCH --output slurm_sample_experimental.out
 #SBATCH --exclude bp1-gpu031,bp1-gpu032
 
 echo Running on host `hostname`
@@ -18,4 +18,4 @@ echo `echo $SLURM_JOB_NODELIST | uniq`
 echo GPU number: $CUDA_VISIBLE_DEVICES
 
 #! Run the executable
-python3 -u sample_no_sqrt.py
+python3 -u sample_experimental.py
