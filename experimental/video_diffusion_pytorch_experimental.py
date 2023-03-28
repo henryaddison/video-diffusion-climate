@@ -502,7 +502,7 @@ class GaussianDiffusion(nn.Module):
         self.num_timesteps = num_timesteps
         self.omega_r = 100000 # Reconstruction-guided sampling
 
-    def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
+    def log_snr_schedule_cosine(self, t, log_snr_min = -15, log_snr_max = 15):
         b = t.shape[0]
         t_min = math.atan(math.exp(-0.5 * log_snr_max))
         t_max = math.atan(math.exp(-0.5 * log_snr_min))
@@ -616,7 +616,7 @@ class GaussianDiffusion(nn.Module):
         lambda_t = self.log_snr_schedule_cosine(times)
 
         noise = torch.randn_like(x)
-        y_noisy = self.q_sample(y, lambda_t, noise)
+        y_noisy = self.q_sample(x, lambda_t, noise)
         v = self.unet(y_noisy, lambda_t.reshape(-1))
 
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
