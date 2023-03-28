@@ -270,30 +270,75 @@ A notable aspect of the forward process is that the joint distribution of latent
 \end{align}
 where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha_{t|s}^2\sigma_s^2$. A full derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$ is given in Appendix \ref{appx:diffusion_q_z_t_given_z_s}.
 
+\subsection{Noise Schedule}
+\label{sec:background_diffusion_noise_schedule}
+
+We formalise the notion that $\mathbf{z}_t$ is increasingly noisy by defining the log signal-to-noise ratio
+\begin{align}
+      \lambda_t = \log\left( \frac{\alpha_t^2}{\sigma_t^2}\right)\in[\lambda_{\min}, \lambda_{\max}]
+\end{align}
+as a strictly monotonically decreasing function $f_{\lambda}$ of time $t\in[0, 1]$, known as the \textit{noise schedule}.
+
+In this work, we use a truncated continuous-time version of the $\alpha$-cosine schedule \cite{IDDPM_Nichol}, introduced in its original discrete-time form by Nichol and Dhariwal \cite{IDDPM_Nichol}. The $\alpha$-cosine schedule was motivated by the fact that the `linear' schedule introduced in prior work by Ho et al. \cite{DDPM_Ho} causes $\alpha_t$ to fall to zero more quickly than is optimal. Nichol and Dhariwal empirically found that this induces too much noise in the latter stages of the forward diffusion process; as such, the latent variables $\mathbf{z}_t$ in these stages contribute little to sample quality. In response, they proposed the original discrete-time $\alpha$-cosine schedule. In this work, we use a continuous-time diffusion model and therefore use an adapted model described in \cite{Simple_Diffusion_Hoogeboom}. More formally, we define:
+\begin{align}
+      f_{\lambda}(t)=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
+\end{align} 
+where $t_0$ and $t_1$ truncate the range of $f_{\lambda}(t)$ to $[\lambda_{\min}, \lambda_{\max}]$ for $t\in[0,1]$, and are themselves defined as:
+\begin{align}
+      t_0&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\max}\right)\right)\\
+      t_1&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\min}\right)\right)
+\end{align}
+We compute $\alpha_t$ and $\sigma_t$ from $\lambda_t$ via the following equations:
+\begin{align}
+      \alpha_t&=\sqrt{S(\lambda_t)}\\
+      \sigma_t&=\sqrt{S(-\lambda_t)}
+\end{align}
+where $S$ is the sigmoid function. A full derivation of $f_\lambda$ is given in Appendix \ref{appx:diffusion_cosine_noise_schedule}.
+
+
 \subsection{Reverse Generative Model}
 \label{sec:background_diffusion_reverse}
 
 The generative model is a learned hierarchical model that matches the forward process running in reverse-time: we sequentially generate latent variables $\mathbf{z}_t$ starting from $t=1$ and working backwards to $t=0$.
 
-Assuming our diffusion model is variance preserving (i.e. $\alpha_t=\sqrt{1-\sigma_t^2}$) and $\alpha_1\approx 0$, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
+Assuming our diffusion model is variance preserving (i.e. $\alpha_t^2=1-\sigma_t^2$) and sufficiently small $\lambda_{\min}$, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
 \begin{align}
       p(\mathbf{z}_1)\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
 \end{align}
 
-
-
-\subsection{Noise Schedule}
-\label{sec:background_diffusion_noise_schedule}
-
-We formalise the notion that $\mathbf{z}_t$ is increasingly noisy by defining a log signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$ as a strictly monotonically decreasing function of time $t\in[0, 1]$.
+In this work, to sequentially generate the latent variables, we use the discrete-time ancestral sampler \cite{DDPM_Ho}. We define:
 \begin{align}
-      \lambda(t) = \log\left( \frac{\alpha_t^2}{\sigma_t^2}\right)
+      p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
+      &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
+\end{align}
+where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate of the original data $\mathbf{x}$ given latent $\mathbf{z}_t$ and log signal-to-noise ratio $\lambda_t$, and
+\begin{align}
+      \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
+      \tilde{\sigma}_{s|t}^2&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
 \end{align}
 
-The \textit{noise schedule} is a critical aspect of the diffusion model. It maps the time variable $t\in[0, 1]$ to a log-signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$.
+For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p(\mathbf{z}_0)$ is practically equivalent to learning a model $p(\mathbf{x})$.
+
+\subsection{Objective Function}
+\label{sec:background_diffusion_objective}
+
+Diffusion models in the literature are optimised with various objectives that are special cases of a weighted loss \cite{Understanding_Diffusion_Objective_Kingma}.
+
+\subsection{Reconstruction-Guided Sampling}
+\label{sec:background_diffusion_reconstruction_guided_sampling}
 
 \section{Climate Simulations}
 \label{sec:background_climate}
+
+% -----------------------------------------------------------------------------
+
+\chapter{Results}
+\label{chap:results}
+
+% -----------------------------------------------------------------------------
+
+\chapter{Conclusion}
+\label{chap:conclusion}
 
 % =============================================================================
 
@@ -359,6 +404,40 @@ where $\boldsymbol\epsilon_t^*, \boldsymbol\epsilon_s\sim\mathcal{N}(\mathbf{0},
       &\sim\mathcal{N}\left(\mathbf{z}_t;\alpha_{t|s}\mathbf{z}_s,\sigma_{t|s}^2\mathbf{I}\right)
 \end{align}
 The subscript $t|s$ relates to the fact that $\alpha_{t|s}$ and $\sigma_{t|s}$ define the parameters of the Gaussian probability density function $q(\mathbf{z}_t|\mathbf{z}_s)$.
+
+\section{$\alpha$-Cosine Noise Schedule}
+\label{appx:diffusion_cosine_noise_schedule}
+
+Before truncation, the continuous-time version of the $\alpha$-cosine schedule \cite{IDDPM_Nichol} as described in \cite{Simple_Diffusion_Hoogeboom} defines $\alpha_t^2$ at a given timestep $t\in[0,1]$ as:
+\begin{align}
+      \alpha_t^2=\cos^2\left(\frac{\pi}{2}t\right)
+\end{align}
+Since our model is a variance-preserving diffusion model, we can show that:
+\begin{align}
+      \sigma_t^2&=1-\alpha_t^2\\
+      &=1-\cos^2\left(\frac{\pi}{2}t\right)\\
+      &=\sin^2\left(\frac{\pi}{2}t\right)
+\end{align}
+As such, we define our noise schedule before truncation $\tilde{f}_\lambda$ for all $t\in[0,1]$ as:
+\begin{align}
+      \tilde{f}_\lambda(t)&=\log\left(\frac{\alpha_t^2}{\sigma_t^2}\right)\\
+      &=\log\left(\frac{\cos^2\left(\frac{\pi}{2}t\right)}{\sin^2\left(\frac{\pi}{2}t\right)}\right)\\
+      &=-2\log\left(\tan\left(\frac{\pi}{2}t\right)\right)
+\end{align}
+However, the above noise schedule means that $\tilde{f}_\lambda:[0,1]\to[-\infty, \infty]$; in simpler terms, $\lambda_t$ is unbounded. We follow prior work (e.g. \cite{Simple_Diffusion_Hoogeboom,VDM_Ho}) by truncating $\lambda_t$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$. To do so, we first need to define the inverse of the unbounded noise schedule:
+\begin{align}
+      \tilde{f}_\lambda^{-1}(\lambda)=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda\right)\right)
+\end{align}
+From this, we define $t_0$ and $t_1$ as:
+\begin{align}
+      t_0&=\tilde{f}_\lambda^{-1}(0)=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\max}\right)\right)\\
+      t_1&=\tilde{f}_\lambda^{-1}(1)=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\min}\right)\right)
+\end{align}
+The truncated noise schedule used in this work is then defined as:
+\begin{align}
+      f_\lambda(t)&=\tilde{f}_\lambda(t_0+t(t_1-t_0))\\
+      &=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
+\end{align}
 
 % =============================================================================
 

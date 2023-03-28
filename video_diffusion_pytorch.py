@@ -537,7 +537,7 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_weighted.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_lambda_30.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
         plt.savefig("monotonic_net.png")
@@ -563,7 +563,7 @@ class GaussianDiffusion(nn.Module):
         self.monotonic_net = MonotonicNet()
         self.omega_r = 100000 # Reconstruction-guided sampling
 
-    def log_snr_schedule_cosine(self, t, log_snr_min = -15, log_snr_max = 15):
+    def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
         t_min = math.atan(math.exp(-0.5 * log_snr_max))
         t_max = math.atan(math.exp(-0.5 * log_snr_min))
