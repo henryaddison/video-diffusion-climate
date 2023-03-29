@@ -67,6 +67,9 @@
 \RequirePackage{lipsum}
 % http://www.ctan.org/tex-archive/usergrps/dante/dtk
 \RequirePackage{dtklogos}
+% Packages added to original class
+\RequirePackage{pgfplots}
+\RequirePackage{subcaption}
 
 % =============================================================================
 

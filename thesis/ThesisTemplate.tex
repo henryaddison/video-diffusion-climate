@@ -247,7 +247,7 @@
 
 Diffusion models are 
 
-Given observed datapoints $\mathbf{x}$, the goal of a generative model is to learn to model its true data distribution $p(\mathbf{x})$.
+Given observed datapoints $\mathbf{x}$, the goal of a generative model is to learn to model its true data distribution $q(\mathbf{x})$.
 
 \subsection{Forward Diffusion Process}
 \label{sec:background_diffusion_forward}
@@ -256,7 +256,7 @@ The \textit{forward diffusion process} is a Gaussian diffusion process that defi
 \begin{align}
       \mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-The forward process forms a conditional joint distribution $q(\mathbf{z}|\mathbf{x})$, whose marginal distributions of latent variables $\mathbf{z}_t$ given $\mathbf{x}\sim p(\mathbf{x})$ are given by:
+The forward process forms a conditional joint distribution $q(\mathbf{z}|\mathbf{x})$, whose marginal distributions of latent variables $\mathbf{z}_t$ given $\mathbf{x}\sim q(\mathbf{x})$ are given by:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t;\alpha_t\mathbf{x},\sigma_t^2\mathbf{I}\right)
       \label{eq:q_z_t_given_x}
@@ -279,30 +279,101 @@ as a strictly monotonically decreasing function $f_{\lambda}$ of time $t\in[0, 1
 In this work, we use a truncated continuous-time version of the $\alpha$-cosine schedule \cite{IDDPM_Nichol}, introduced in its original discrete-time form by Nichol and Dhariwal \cite{IDDPM_Nichol}. The $\alpha$-cosine schedule was motivated by the fact that the `linear' schedule introduced in prior work by Ho et al. \cite{DDPM_Ho} causes $\alpha_t$ to fall to zero more quickly than is optimal. Nichol and Dhariwal empirically found that this induces too much noise in the latter stages of the forward diffusion process; as such, the latent variables $\mathbf{z}_t$ in these stages contribute little to sample quality. In response, they proposed the original discrete-time $\alpha$-cosine schedule. In this work, we use a continuous-time diffusion model and therefore use an adapted model described in \cite{Simple_Diffusion_Hoogeboom}. More formally, we define:
 \begin{align}
       f_{\lambda}(t)=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
+      \label{eq:f_lambda_alpha_cosine}
 \end{align} 
-where $t_0$ and $t_1$ truncate the range of $f_{\lambda}(t)$ to $[\lambda_{\min}, \lambda_{\max}]$ for $t\in[0,1]$, and are themselves defined as:
+where $t_0$ and $t_1$ truncate $f_{\lambda}(t)$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$ for $t\in[0,1]$, and are themselves defined as:
 \begin{align}
       t_0&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\max}\right)\right)\\
       t_1&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\min}\right)\right)
 \end{align}
-We compute $\alpha_t$ and $\sigma_t$ from $\lambda_t$ via the following equations:
-\begin{align}
-      \alpha_t&=\sqrt{S(\lambda_t)}\\
-      \sigma_t&=\sqrt{S(-\lambda_t)}
-\end{align}
-where $S$ is the sigmoid function. A full derivation of $f_\lambda$ is given in Appendix \ref{appx:diffusion_cosine_noise_schedule}.
+Figure \ref{fig:cosine_lambda_t} visualises how the log signal-to-noise ratio $\lambda_t\in[\lambda_{\min},\lambda_{\max}]$ varies with time $t\in[0,1]$ using the $\alpha$-cosine schedule detailed above.
 
+\begin{figure}[htbp]
+      \centering
+      \begin{tikzpicture}
+      \begin{axis}[
+            xlabel=$t$,
+            ylabel=$\lambda_t$,
+            ylabel near ticks,
+            xlabel near ticks,
+            ylabel style={rotate=-90},
+            xmin=0,
+            xmax=1,
+            ymin=-30,
+            ymax=30,
+            width=.5\linewidth]
+      \addplot[color=red,thick,domain=-0.005:1.005,samples=200]{-2 * ln(tan(deg(pi / 2 * ((2 / pi * rad(atan(exp(-0.5 * 30)))) + x * ((2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))))))};
+      \end{axis}
+      \end{tikzpicture}
+      \caption{Relationship between time $t$ and the log signal-to-noise ratio $\lambda_t$ for the truncated continuous-time $\alpha$-cosine noise schedule $f_\lambda(t)$ as defined in Equation \ref{eq:f_lambda_alpha_cosine} with $\lambda_{\min}=-30$ and $\lambda_{\max}=30$. The horizontal axis is time $t\in[0,1]$; the vertical axis is $\lambda_t=f_\lambda(t)\in[\lambda_{\min},\lambda_{\max}]=[-30, 30]$.}
+      \label{fig:cosine_lambda_t}
+\end{figure}
+
+We can compute $\alpha_t$ and $\sigma_t$ from either $\lambda_t$ or $t$ via the following equations:
+\begin{alignat}{2}
+      \alpha_t&=\sqrt{S(\lambda_t)}&&=\cos\left(\frac{\pi}{2}(t_0+t(t_1-t_0)\right)\label{eq:alpha_t_alpha_cosine}\\
+      \sigma_t&=\sqrt{S(-\lambda_t)}&&=\sin\left(\frac{\pi}{2}(t_0+t(t_1-t_0)\right)\label{eq:sigma_t_alpha_cosine}
+\end{alignat}
+where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualises how the values of $\alpha_t$ and $\sigma_t$ vary with time $t\in[0,1]$ using the $\alpha$-cosine schedule detailed above. Appendix \ref{appx:diffusion_cosine_noise_schedule} provides further details on the form of $f_\lambda$ and how we can derive the forms for $\alpha_t$ and $\sigma_t$.
+
+\begin{figure}[htbp]
+      \begin{subfigure}{0.5\textwidth}
+            \begin{tikzpicture}
+            \begin{axis}[
+                  xlabel=$t$,
+                  ylabel=$\alpha_t$,
+                  ylabel near ticks,
+                  xlabel near ticks,
+                  ylabel style={rotate=-90},
+                  xmin=0,
+                  xmax=1,
+                  ymin=0,
+                  ymax=1,
+                  width=\linewidth]
+            \addplot[color=red,thick,domain=0:1,samples=100]{cos(deg(pi / 2 * ((2 / pi * rad(atan(exp(-0.5 * 30)))) + x * ((2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30))))))))};
+            \end{axis}
+            \end{tikzpicture}
+      \end{subfigure}
+      \begin{subfigure}{0.5\textwidth}
+            \begin{tikzpicture}
+            \begin{axis}[
+                  xlabel=$t$,
+                  ylabel=$\sigma_t$,
+                  ylabel near ticks,
+                  xlabel near ticks,
+                  ylabel style={rotate=-90},
+                  xmin=0,
+                  xmax=1,
+                  ymin=0,
+                  ymax=1,
+                  width=\linewidth]
+            \addplot[color=red,thick,domain=0:1,samples=100]{sin(deg(pi / 2 * ((2 / pi * rad(atan(exp(-0.5 * 30)))) + x * ((2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30))))))))};
+            \end{axis}
+            \end{tikzpicture}
+      \end{subfigure}
+      \caption{Relationship between time $t$ and $\alpha_t$ (left) and $\sigma_t$ (right) for the same truncated continuous-time $\alpha$-cosine noise schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is time $t\in[0,1]$; the vertical axis is the value of $\alpha_t$ (left) and $\sigma_t$ (right).}
+      \label{fig:cosine_alpha_sigma}
+\end{figure}
 
 \subsection{Generative Model}
 \label{sec:background_diffusion_reverse}
 
-The \textit{generative model} is a learned hierarchical model that matches the forward process running in reverse-time: we sequentially generate latent variables $\mathbf{z}_t$ starting from $t=1$ and working backwards to $t=0$.
-
-In this work, our diffusion model is variance preserving (i.e. $\alpha_t^2=1-\sigma_t^2$) and $\lambda_{\min}$ is sufficiently small. As such, we can model the marginal distribution of $\mathbf{z}_1$ as the multivariate standard Gaussian:
+The \textit{generative model} is a learned hierarchical model that matches the forward process running in reverse-time: in $T$ uniformly-spaced discrete timesteps, we sequentially generate latent variables, starting from $t=1$ and working backwards to $t=0$. More formally, our hierarchical generative model defines a joint distribution over latent variables:
 \begin{align}
-      p(\mathbf{z}_1)\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
+      p_\theta(\mathbf{z})=p(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
 \end{align}
-Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1; \mathbf{0}, \mathbf{I})$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
+where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. 
+
+For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p(\mathbf{z}_1)$ such that:
+\begin{align}
+      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z_1}))\approx 0
+\end{align}
+where $D_{KL}$ is the Kullback--Leibler divergence. In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p(\mathbf{z}_1)$ as the multivariate standard Gaussian:
+\begin{align}
+      p(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
+\end{align}
+
+Once we have sampled $\mathbf{z}_1\sim p(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
 \begin{align}
       p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
       &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
@@ -312,26 +383,60 @@ where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate
       \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
       \tilde{\sigma}_{s|t}^2&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
 \end{align}
-For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p(\mathbf{z}_0)$ is practically equivalent to learning a model $p(\mathbf{x})$. 
+
+\subsection{Parameterisations}
+\label{sec:background_diffusion_parameterisations}
+
+In Equation 
+
+In this work, we employ the $\mathbf{v}$-parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans} to facilitate progressive distillation for faster sampling. Though we do not apply progressive distillation in this work, we use the $\mathbf{v}$-parameterisation for the additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}: faster convergence of sample quality and prevention of temporal colour shifting sometimes observed with $\boldsymbol\epsilon$-prediction video diffusion models. Formally, the $\mathbf{v}$-parameterisation trains the model to predict:
+\begin{align}
+      \mathbf{v}_t=\alpha_t\boldsymbol\epsilon - \sigma_t\mathbf{x}
+\end{align}
+
+We define
+\begin{align}
+      \phi_t&=\arctan\left(\frac{\sigma_t}{\alpha_t}\right)\\
+      &=\arctan\left(\frac{\sin\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)}{\cos\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)}
+      \right)\\
+      &=\arctan\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)\\
+      &=\frac{\pi}{2}(t_0+t(t_1-t_0))
+\end{align}
+We define the velocity of $\mathbf{z}_t$ as 
+\begin{align}
+      \mathbf{v}_t=\frac{\mathbf{z}_t}{d\phi}&=\frac{d\cos(\phi)}{d\phi}\mathbf{x}+\frac{d\sin(\phi)}{d\phi}\boldsymbol\epsilon\\
+      &=-\sin(\phi)\mathbf{x}+\cos(\phi)\boldsymbol\epsilon
+\end{align}
+We rearrange to get:
+\begin{align}
+      \sin(\phi)\mathbf{x}&=\cos(\phi)\boldsymbol\epsilon-\mathbf{v}_t\\
+      &=\cos(\phi)\left(\frac{\mathbf{z}_t-\cos(\phi)\mathbf{x}}{\sin(\phi)}\right)-\mathbf{v}_t\\
+      \sin^2(\phi)\mathbf{x}&=\cos(\phi)\mathbf{z}_t-\cos^2(\phi)\mathbf{x}-\sin(\phi)\mathbf{v}_t\\
+      \sin^2(\phi)\mathbf{x}+\cos^2(\phi)\mathbf{x}&=\cos(\phi)\mathbf{z}_t-\sin(\phi)\mathbf{v}_t\\
+      (\sin^2(\phi)+\cos^2(\phi))\mathbf{x}&=\cos(\phi)\mathbf{z}_t-\sin(\phi)\mathbf{v}_t\\
+      \mathbf{x}&=\cos(\phi)\mathbf{z}_t-\sin(\phi)\mathbf{v}_t
+\end{align}
+As such:
+\begin{align}
+      \mathbf{x}=\alpha_t\mathbf{z}_t-\sigma_t\mathbf{v}_t
+\end{align}
 
 \subsection{Objective Function}
 \label{sec:background_diffusion_objective}
 
-Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} discovered that diffusion models in the broader literature are optimised with various objectives that are almost all special cases of a weighted loss  per datapoint $\mathbf{x}$, which is defined as:
+Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} discovered that diffusion models in the broader literature are optimised with various objectives that are almost all special cases of a weighted loss, which is defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathcal{L}_w=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}'(\lambda)d\lambda
+      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]d\lambda\\
+      &=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\frac{1}{2}\mathbb{E}_{\lambda\sim p(\lambda)}\left[\frac{w(\lambda)}{p(\lambda)}\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]
 \end{align}
-where
-\begin{align}
-      \mathcal{L}(\lambda)&=D_{KL}(q(\mathbf{z}_t,...,\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z}_t,...,\mathbf{z}_1))\\
-      \mathcal{L}'(\lambda)&=\frac{d}{d\lambda}\mathcal{L}=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]
-\end{align}
-and $w(\lambda)$ is a weighting function.
+where $\mathcal{L}(\lambda)$ is the Kullback--Leibler divergence from the joint distributions $q$ to $p$ for a subset of timesteps from $t=f_\lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$; $w(\lambda)$ is a weighting function; and $p(\lambda)$ is determined by the training noise schedule---we can sample from $p(\lambda)$ by first sampling $t\sim\mathcal{U}(0, 1)$, then computing $\lambda=f_\lambda(t)$. The first term, $w(\lambda_{\min})\mathcal{L}(\lambda_{\min})$, is constant and close to zero for sufficiently small $\lambda_{\min}$. The second term, however, contains an intractable integral and thus is optimised via an importance-weighted Monte Carlo integrator in practice.
 
-In this work, we use the $\mathbf{v}$-parameterisation, wherein
+Minimisation of the various loss functions used to optimise diffusion models in the literature equates to minimisation of $\mathcal{L}_w$, with specific choices of $p(\lambda)$ and $w(\lambda)$. Notably, uniform weighting with $w(\lambda)=1$ for all $\lambda\in[\lambda_{\min}, \lambda_{\max}]$ corresponds to maximisation of the evidence lower bound objective (ELBO). The ELBO---also sometimes known as the variational lower bound---is a lower bound of the log-likelihood of the data. More concretely:
 \begin{align}
-      \mathbf{v} = 
+      \log p(\mathbf{x}) = 
 \end{align}
+
+
 
 \subsection{Reconstruction-Guided Sampling}
 \label{sec:background_diffusion_reconstruction_guided_sampling}
