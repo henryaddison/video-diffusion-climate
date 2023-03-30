@@ -510,7 +510,7 @@ class MonotonicNet(nn.Module):
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-        x = x + 0.05 * identity
+        x = x + 0.1 * identity
 
         return x
     

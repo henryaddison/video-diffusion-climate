@@ -79,8 +79,8 @@ if torch.cuda.is_available():
 samples = torch.zeros(0, 1, 100, 64, 64)
 
 
-BATCH_SIZE = 16
-LENGTH = 100
+BATCH_SIZE = 4
+LENGTH = 1000
 
 # Since recon-guidance can only take a match batch size of 16, we need to multiple iterations
 for _ in range(10):

@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name climate_experimental
+#SBATCH --job-name climate
 #SBATCH --nodes 1
 #SBATCH --gres gpu:A100:1
 #SBATCH --mem 124G
 #SBATCH --partition cnu
 #SBATCH --account COSC020762
-#SBATCH --output slurm_train_no_transform.out
+#SBATCH --output slurm_train_transform_0.1_lr_decay.out
 #SBATCH --exclude bp1-gpu031,bp1-gpu032
 
 echo Running on host `hostname`
