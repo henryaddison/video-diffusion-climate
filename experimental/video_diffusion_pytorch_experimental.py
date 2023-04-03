@@ -777,7 +777,7 @@ class Trainer(object):
         print(len(list(diffusion_model.parameters())), len(monotonic_net_params), len(other_params))
 
         self.opt = Adam(param_groups)
-        self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=-1, verbose=True)
+        self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=-1)
 
         self.step = 0
 
@@ -820,6 +820,8 @@ class Trainer(object):
         self.model.load_state_dict(data['model'], **kwargs)
         self.ema_model.load_state_dict(data['ema'], **kwargs)
         self.scaler.load_state_dict(data['scaler'])
+
+        self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=self.step)
 
     def train(
         self,
