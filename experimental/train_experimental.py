@@ -30,5 +30,5 @@ trainer = Trainer(
     results_folder='/user/work/cj19328/results_transform_0.1_lr_decay'
 )
 
-trainer.load(64)
+trainer.load(209)
 trainer.train()
