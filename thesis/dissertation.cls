@@ -71,6 +71,8 @@
 \RequirePackage{pgfplots}
 \RequirePackage{subcaption}
 
+\usetikzlibrary{arrows}
+
 % =============================================================================
 
 \makeatletter

@@ -511,7 +511,8 @@ class MonotonicNet(nn.Module):
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-        x = x + 0.1 * identity
+
+        x = x + 0.01 * identity
 
         return x
     
@@ -528,8 +529,8 @@ class MonotonicNet(nn.Module):
     def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
-        log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
-        return log_dy_dx.mean()
+        # log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
+        return log_dy_dx
 
     @torch.inference_mode()
     def plot(self):
@@ -538,10 +539,10 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         # print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_0.1_lr_decay.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_gamma.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
-        plt.savefig("monotonic_net_transform_0.1_lr_decay.png")
+        plt.savefig("monotonic_net_gamma.png")
         plt.close()
 
 
@@ -563,6 +564,11 @@ class GaussianDiffusion(nn.Module):
         self.num_timesteps = num_timesteps
         self.monotonic_net = MonotonicNet()
         self.omega_r = 100000 # Reconstruction-guided sampling
+
+        self.t0 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * 30))
+        self.t1 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * -30))
+
+        self.gamma = 0.1
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
@@ -690,9 +696,13 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         v_target = alpha_t * noise - sigma_t * y
 
-        diffusion_loss = F.mse_loss(v, v_target)
-        loss = diffusion_loss - log_dy_dx
-        print("Diffusion loss and -log|dy/dx|", diffusion_loss.item(), -log_dy_dx.item())
+        diffusion_loss = F.mse_loss(v, v_target, reduction='none')
+
+        coef = torch.pi * (self.t1 - self.t0) * (torch.exp(lambda_t / 2) + torch.exp(-lambda_t / 2)) / (torch.exp(-lambda_t) + 1)
+        loss = (1 + self.gamma * coef) * diffusion_loss - self.gamma * log_dy_dx
+        loss = loss.mean()
+        print(diffusion_loss.shape, log_dy_dx.shape)
+        print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
 
         return loss
 
@@ -768,16 +778,17 @@ class Trainer(object):
 
         self.dl = cycle(data.DataLoader(self.ds, batch_size = train_batch_size, shuffle=True, pin_memory=True))
 
-        monotonic_net_params = list(diffusion_model.monotonic_net.parameters())
-        other_params = list(set(diffusion_model.parameters()) - set(monotonic_net_params))
-        param_groups = [
-            {'params': other_params, 'lr': train_lr},
-            {'params': monotonic_net_params, 'lr': 1e-3},
-        ]
-        print(len(list(diffusion_model.parameters())), len(monotonic_net_params), len(other_params))
+        # monotonic_net_params = list(diffusion_model.monotonic_net.parameters())
+        # other_params = list(set(diffusion_model.parameters()) - set(monotonic_net_params))
+        # param_groups = [
+        #     {'params': other_params, 'lr': train_lr},
+        #     {'params': monotonic_net_params, 'lr': 1e-3},
+        # ]
+        # print(len(list(diffusion_model.parameters())), len(monotonic_net_params), len(other_params))
 
-        self.opt = Adam(param_groups)
-        self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=-1)
+        # self.opt = Adam(param_groups)
+        # self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=-1)
+        self.opt = Adam(diffusion_model.parameters(), lr = train_lr)
 
         self.step = 0
 
@@ -821,7 +832,7 @@ class Trainer(object):
         self.ema_model.load_state_dict(data['ema'], **kwargs)
         self.scaler.load_state_dict(data['scaler'])
 
-        self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=self.step)
+        # self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=self.step)
 
     def train(
         self,
@@ -843,7 +854,7 @@ class Trainer(object):
             self.scaler.update()
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
-            self.lr_schedulers.step()
+            # self.lr_schedulers.step()
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
@@ -861,7 +872,7 @@ class Trainer(object):
                 self.save(milestone)
 
                 # TODO: Remove this
-                print(f"LR: {self.lr_schedulers.get_last_lr()}")
+                # print(f"LR: {self.lr_schedulers.get_last_lr()}")
 
             self.step += 1
 
