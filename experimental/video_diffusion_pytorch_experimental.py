@@ -539,10 +539,10 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         # print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_gamma.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_gamma_0.01_mask.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
-        plt.savefig("monotonic_net_gamma.png")
+        plt.savefig("monotonic_net_gamma_0.01_mask.png")
         plt.close()
 
 
@@ -568,7 +568,7 @@ class GaussianDiffusion(nn.Module):
         self.t0 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * 30))
         self.t1 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * -30))
 
-        self.gamma = 0.1
+        self.gamma = 0.01
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
@@ -689,7 +689,7 @@ class GaussianDiffusion(nn.Module):
         times = torch.zeros(b).uniform_(0, 1).cuda() # TODO: Maybe implement the approach outlined in VDM paper
         lambda_t = self.log_snr_schedule_cosine(times)
 
-        noise = torch.randn_like(x)
+        noise = torch.randn_like(x)  
         y_noisy = self.q_sample(y, lambda_t, noise)
         v = self.unet(y_noisy, lambda_t.reshape(-1))
 
@@ -699,9 +699,10 @@ class GaussianDiffusion(nn.Module):
         diffusion_loss = F.mse_loss(v, v_target, reduction='none')
 
         coef = torch.pi * (self.t1 - self.t0) * (torch.exp(lambda_t / 2) + torch.exp(-lambda_t / 2)) / (torch.exp(-lambda_t) + 1)
-        loss = (1 + self.gamma * coef) * diffusion_loss - self.gamma * log_dy_dx
+        mask = lambda_t < 10
+        loss = (1 + mask * self.gamma * coef) * diffusion_loss - 2 * mask * self.gamma * log_dy_dx
         loss = loss.mean()
-        print(diffusion_loss.shape, log_dy_dx.shape)
+        # print(diffusion_loss.shape, log_dy_dx.shape)
         print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
 
         return loss
