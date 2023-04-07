@@ -9,7 +9,6 @@ from torch.utils import data
 from pathlib import Path
 from torch.optim import Adam
 from torch.cuda.amp import autocast, GradScaler
-from torch.optim.lr_scheduler import LambdaLR
 
 from tqdm import tqdm
 from einops import rearrange
@@ -511,8 +510,7 @@ class MonotonicNet(nn.Module):
         x = self.act(x)
         x = self.layer_3(x)
         x = self.act(x)
-
-        x = x + 0.01 * identity
+        x = x + 0.1 * identity
 
         return x
     
@@ -530,6 +528,7 @@ class MonotonicNet(nn.Module):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
         # log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
+        # return log_dy_dx.mean()
         return log_dy_dx
 
     @torch.inference_mode()
@@ -537,12 +536,12 @@ class MonotonicNet(nn.Module):
         xs = torch.linspace(PR_MIN, PR_MAX, 100000).reshape(-1, 1).cuda()
         xs_normalised = 2 * ((xs - PR_MIN) / (PR_MAX - PR_MIN))
         ys = self.forward(xs_normalised)
-        # print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
+        print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_gamma_0.01_mask.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_p_z_t.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
-        plt.savefig("monotonic_net_gamma_0.01_mask.png")
+        plt.savefig("monotonic_net_transform_p_z_t.png")
         plt.close()
 
 
@@ -564,11 +563,6 @@ class GaussianDiffusion(nn.Module):
         self.num_timesteps = num_timesteps
         self.monotonic_net = MonotonicNet()
         self.omega_r = 100000 # Reconstruction-guided sampling
-
-        self.t0 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * 30))
-        self.t1 = (2 / torch.pi) * math.atan(math.exp(-(1 / 2) * -30))
-
-        self.gamma = 0.01
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
@@ -689,20 +683,21 @@ class GaussianDiffusion(nn.Module):
         times = torch.zeros(b).uniform_(0, 1).cuda() # TODO: Maybe implement the approach outlined in VDM paper
         lambda_t = self.log_snr_schedule_cosine(times)
 
-        noise = torch.randn_like(x)  
+        noise = torch.randn_like(x)
         y_noisy = self.q_sample(y, lambda_t, noise)
         v = self.unet(y_noisy, lambda_t.reshape(-1))
 
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         v_target = alpha_t * noise - sigma_t * y
 
-        diffusion_loss = F.mse_loss(v, v_target, reduction='none')
+        diffusion_loss = F.mse_loss(v, v_target, reduction = 'none')
 
-        coef = torch.pi * (self.t1 - self.t0) * (torch.exp(lambda_t / 2) + torch.exp(-lambda_t / 2)) / (torch.exp(-lambda_t) + 1)
-        mask = lambda_t < 10
-        loss = (1 + mask * self.gamma * coef) * diffusion_loss - 2 * mask * self.gamma * log_dy_dx
+
+        coef = - torch.exp(-lambda_t / 2) / (1 / torch.cosh(lambda_t / 2))
+
+        loss = (1 / 2) * diffusion_loss + coef * log_dy_dx
+
         loss = loss.mean()
-        # print(diffusion_loss.shape, log_dy_dx.shape)
         print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
 
         return loss
@@ -728,18 +723,6 @@ class Dataset(data.Dataset):
         return self.tensor[index]
 
 # trainer class
-
-# TODO: Tidy this up
-initial_lr = 1e-3
-final_lr = 1e-8
-total_steps = 100000
-decay_rate = (final_lr / initial_lr) ** (1 / total_steps)
-
-def monotonic_lr_decay(step: int):
-    return (decay_rate ** step) if step < total_steps else 0
-
-def constant_lr(step: int):
-    return 1
 
 class Trainer(object):
     def __init__(
@@ -778,17 +761,6 @@ class Trainer(object):
         assert len(self.ds) > 0, 'need to have at least 1 video to start training (although 1 is not great, try 100k)'
 
         self.dl = cycle(data.DataLoader(self.ds, batch_size = train_batch_size, shuffle=True, pin_memory=True))
-
-        # monotonic_net_params = list(diffusion_model.monotonic_net.parameters())
-        # other_params = list(set(diffusion_model.parameters()) - set(monotonic_net_params))
-        # param_groups = [
-        #     {'params': other_params, 'lr': train_lr},
-        #     {'params': monotonic_net_params, 'lr': 1e-3},
-        # ]
-        # print(len(list(diffusion_model.parameters())), len(monotonic_net_params), len(other_params))
-
-        # self.opt = Adam(param_groups)
-        # self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=-1)
         self.opt = Adam(diffusion_model.parameters(), lr = train_lr)
 
         self.step = 0
@@ -833,8 +805,6 @@ class Trainer(object):
         self.ema_model.load_state_dict(data['ema'], **kwargs)
         self.scaler.load_state_dict(data['scaler'])
 
-        # self.lr_schedulers = LambdaLR(self.opt, lr_lambda=[constant_lr, monotonic_lr_decay], last_epoch=self.step)
-
     def train(
         self,
     ):
@@ -855,7 +825,6 @@ class Trainer(object):
             self.scaler.update()
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
-            # self.lr_schedulers.step()
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
@@ -871,9 +840,6 @@ class Trainer(object):
                 torch.save(all_videos_list, video_path)
                 
                 self.save(milestone)
-
-                # TODO: Remove this
-                # print(f"LR: {self.lr_schedulers.get_last_lr()}")
 
             self.step += 1
 

@@ -15,7 +15,6 @@ diffusion = GaussianDiffusion(
 
 if torch.cuda.is_available():
     diffusion = diffusion.cuda()
-print("Diffusion to CUDA")
 
 trainer = Trainer(
     diffusion,
@@ -28,8 +27,8 @@ trainer = Trainer(
     gradient_accumulate_every=2,
     ema_decay=0.995,
     amp=True,
-    results_folder='/user/work/cj19328/results_gamma_0.01_mask'
+    results_folder='/user/work/cj19328/results_transform_p_z_t'
 )
 
-# trainer.load(209)
+# trainer.load(37)
 trainer.train()
