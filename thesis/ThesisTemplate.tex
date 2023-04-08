@@ -290,9 +290,9 @@ ur model takes the form:
 \end{align}
 The prior $p_\theta(\mathbf{z})$ over the latent variable is often chosen to be the multivariate standard Gaussian:
 \begin{align}
-      p(\mathbf{z})=\mathcal{N}(\mathbf{z};\mathbf{0}, \mathbf{I})
+      p_\theta(\mathbf{z})=\mathcal{N}(\mathbf{z};\mathbf{0}, \mathbf{I})
 \end{align}
-We have omitted the subscript $\theta$ to indicate that we have not parameterised the prior with a neural network. The true posterior $p(\mathbf{z}|\mathbf{x})$ is intractable, but we commonly assume it takes on the form of a multivariate Gaussian with diagonal covariance. As such, we introduce an a variational approximate posterior, defined as:
+The true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, but we commonly assume it takes on the form of a multivariate Gaussian with diagonal covariance. As such, we introduce an a variational approximate posterior, defined as:
 \begin{align}
       q_\phi(\mathbf{z}|\mathbf{x})=\mathcal{N}(\mathbf{z}, \boldsymbol{\mu}_\phi(\mathbf{z}), \mathrm{diag}(\boldsymbol\sigma_\phi(\mathbf{z}))^{\circ 2})
 \end{align}
@@ -321,13 +321,13 @@ $p_\theta(\mathbf{x}|\mathbf{z})$ and $q_\phi(\mathbf{z}|\mathbf{x})$ are often 
 \subsection{Evidence Lower Bound Objective}
 \label{sec:background_vae_elbo}
 
-As mentioned in Section \ref{sec:background_generative}, the goal of a generative model, such as a VAE, is to learn parameters $\theta$ such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$. One way to represent this is as a minimisation problem. Mathematically, we wish to learn parameters $\theta$ that minimise the Kullback--Leibler (KL) divergence between the true distribution $p^*(\mathbf{x})$ and our model distribution $p_\theta(\mathbf{x})$, which gives us:
+As mentioned in Section \ref{sec:background_generative}, the goal of a generative model, such as a VAE, is to learn parameters $\theta$ such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$. One way to represent this is as a minimisation problem. Mathematically, we wish to learn parameters $\theta$ that minimise the Kullback--Leibler (KL) divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$, which gives us:
 \begin{align}
       \operatorname{argmin}_{\theta} D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\operatorname{argmin}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log\left(\frac{p^*(\mathbf{x})}{p_\theta(\mathbf{x})}\right)\right]\\
       &=\operatorname{argmin}_{\theta}\left(\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\right)\\
       &=\operatorname{argmin}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
-As such, minimisation of the KL divergence between the two distributions equates to minimisation of the negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ over $\mathbf{x}\sim p^*(\mathbf{x})$. We can analogously express this as maximisation of the log-likelihood:
+As such, minimisation of the KL divergence equates to minimisation of the negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ over $\mathbf{x}\sim p^*(\mathbf{x})$. We can analogously express this as maximisation of the log-likelihood:
 \begin{align}
       \operatorname{argmax}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]
 \end{align}
@@ -509,20 +509,20 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
 
 The \textit{generative model} is a learned hierarchical model that matches the forward process running in reverse-time: in $T$ uniformly-spaced discrete timesteps, we sequentially generate latent variables, starting from $t=1$ and working backwards to $t=0$. More formally, our hierarchical generative model defines a joint distribution over latent variables:
 \begin{align}
-      p_\theta(\mathbf{z})=p(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
+      p_\theta(\mathbf{z})=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
 \end{align}
 where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. 
 
-For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p(\mathbf{z}_1)$ such that:
+For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
 \begin{align}
-      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z_1}))\approx 0
+      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z_1}))\approx 0
 \end{align}
-where $D_{KL}$ is the Kullback--Leibler divergence. In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p(\mathbf{z}_1)$ as the multivariate standard Gaussian:
+where $D_{KL}$ is the Kullback--Leibler divergence. In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
 \begin{align}
-      p(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
+      p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
 \end{align}
 
-Once we have sampled $\mathbf{z}_1\sim p(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
+Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
 \begin{align}
       p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
       &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
@@ -540,7 +540,7 @@ In Section \ref{sec:background_diffusion_reverse}, we defined our generative mod
 \begin{align}
       \hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)=\frac{1}{\alpha_t}\left(\mathbf{z}_t-\sigma_t\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda_t)\right)
 \end{align}
-In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was originally introduced facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}, namely faster convergence of sample quality and prevention of temporal colour shifting sometimes observed with $\boldsymbol\epsilon$-prediction video diffusion models. 
+In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was introduced initially to facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}, namely faster convergence of sample quality and prevention of temporal colour shifting sometimes observed with $\boldsymbol\epsilon$-prediction video diffusion models. 
 
 Formally, for a given datapoint $\mathbf{x}\sim q(\mathbf{x})$  we define the velocity of $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ as:
 \begin{align}
@@ -548,7 +548,7 @@ Formally, for a given datapoint $\mathbf{x}\sim q(\mathbf{x})$  we define the ve
 \end{align}
 where $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise. We train our neural network $\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ to minimise the following loss function, defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\mathbf{v}_t-\hat{\mathbf{v}}_\theta(\mathbf{z}_t, \lambda_t)\Vert_2^2\right]
+      \mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\mathbf{v}_t-\hat{\mathbf{v}}_\theta(\mathbf{z}_t, \lambda_t)\Vert_2^2\right]\label{eq:v_parameterisation_loss}
 \end{align}
 During discrete-time ancestral sampling, we convert our estimate $\mathbf{v}_t\approx\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ into an estimate of the denoised latent $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ via:
 \begin{align}
@@ -556,28 +556,90 @@ During discrete-time ancestral sampling, we convert our estimate $\mathbf{v}_t\a
 \end{align}
 Appendix \ref{appx:diffusion_v_prediction_parameterisation} provides further details on the $\mathbf{v}$-prediction parameterisation, including derivations of the velocity and denoised latent.
 
-\subsection{Objective Function}
-\label{sec:background_diffusion_objective}
+\subsection{ELBO for Diffusion Models}
+\label{sec:background_diffusion_elbo}
 
-Diffusion models can be interpreted as a special case of deep VAEs \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} with a particular choice of inference model and generative model.
+We can interpret diffusion models as a special case of Markovian hierarchical VAEs, with several notable restrictions. Namely, the dimensionality of each latent $\mathbf{z}_t$ must be equal to the dimensionality of the observed variable $\mathbf{x}$; we pre-define $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters; and, the distribution of the final latent $\mathbf{z}_t$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds no information about the observed variable $\mathbf{x}$. Much like the VAE, the original diffusion model introduced by Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} was trained by optimising the ELBO---equivalently minimising the negative ELBO---which we can derive into three constituent terms: a reconstruction loss, a prior loss and a diffusion loss:
 \begin{align}
-      \log p_\theta(\mathbf{x})&\ge \mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z_1}))-\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t, \lambda_t) \Vert_2^2\right]
+      -\log p_\theta(\mathbf{x})&\le -\mathrm{ELBO}(\mathbf{x})\\
+      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
+      &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z_1}))}_{\text{Prior Loss}}+\underbrace{\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t, \lambda_t) \Vert_2^2\right]}_{\text{Diffusion Loss}}\label{eq:diffusion_elbo}
+\end{align}
+With sufficiently large $\lambda_{\max}$, the reconstruction loss is approximately zero since we can almost perfectly reconstruct $\mathbf{x}$ from $\mathbf{z}_0$---this is particularly true for discrete $\mathbf{x}$. Mathematically, as $\lambda_{\max}\to\infty$, we have:
+\begin{align}
+      \lim_{\lambda_{\max}\to\infty}q(\mathbf{z}_0|\mathbf{x})=\delta(\mathbf{z}_0-\mathbf{x})
+\end{align}
+where $\delta$ is the Dirac delta distribution, in which case $\mathbf{z}_0=\mathbf{x}$. Similarly, with sufficiently small $\lambda_{\min}$, the prior loss is approximately zero; as $\lambda_{\min}\to-\infty$, we have:
+\begin{align}
+      \lim_{\lambda_{\min}\to -\infty} q(\mathbf{z}_1|\mathbf{x})&=\mathcal{N}(\mathbf{0}, \mathbf{I})=p_\theta(\mathbf{z}_1)
+\end{align}
+so the KL divergence prior loss term likewise approaches zero.
+
+\subsection{Weighted Loss}
+\label{sec:background_diffusion_weighted_loss}
+
+Most diffusion models in the broader literature---including state-of-the-art models---are not optimised using the ELBO. Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} showed that the various objectives used are all special cases of a \textit{weighted loss}, which is defined per datapoint $\mathbf{x}$ as:
+\begin{align}
+      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}'(\lambda)d\lambda
+\end{align}
+where $w(\lambda)$ is a weighting function and $\mathcal{L}(\lambda)$ is the KL divergence of $q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t=f_\lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$:
+\begin{align}
+      \mathcal{L}(\lambda)=D_{KL}(q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))
+\end{align}
+To maintain consistency with Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma}, we refer to $\mathcal{L}'(\lambda)$ as the \textit{time derivative}, despite actually being the derivative of $\mathcal{L}(\lambda)$ with respect to the log signal-to-noise ratio; it is given by:
+\begin{align}
+      \mathcal{L}'(\lambda)=\frac{d}{d\lambda}\mathcal{L}(\lambda)=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]
+\end{align}
+Substituting the form of $\mathcal{L}(\lambda)$ and $\mathcal{L}'(\lambda)$ and into $\mathcal{L}_w$ gives us:
+\begin{align}
+      \mathcal{L}_w&=w(\lambda_{\min})D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]d\lambda
+\end{align}
+This form provides several useful insights. We can see that the first term, the weighted prior loss, contains no learnable parameters. Thus, minimisation of the weighted loss $\mathcal{L}_w$ equates to minimisation of the intractable integral. In practice, we minimise the integral via an importance-weighted Monte Carlo integrator:
+\begin{align}
+      \int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]d\lambda&=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda)}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon - \hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda)\Vert_2^2 \right]\right]\\
+      &=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]\\
+      &\simeq \frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2
+\end{align}
+where $p_\Lambda(\lambda)$ is determined by the training noise schedule---we can sample from $p_\Lambda(\lambda)$ by first sampling $t\sim\mathcal{U}(0, 1)$, then computing $\lambda=f_\lambda(t)$. 
+
+An important observation made by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} is that the ELBO in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with:
+\begin{align}
+      w(\lambda) = 1
 \end{align}
 
+\subsection{Loss for the $\mathbf{v}$-Prediction Parameterisation as the Weighted Loss}
+\label{sec:background_diffusion_v_weighted_loss}
 
-
-Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} discovered that diffusion models in the broader literature are optimised with various objectives that are almost all special cases of a weighted loss, which is defined per datapoint $\mathbf{x}$ as:
+Figure \ref{fig:p_lambda} displays the probability density function for the truncated continuous-time $\alpha$-cosine schedule described in Section \ref{sec:background_diffusion_noise_schedule}; in equation form, $p_\Lambda(\lambda)$ is given by:
 \begin{align}
-      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]d\lambda\\
-      &=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\frac{1}{2}\mathbb{E}_{\lambda\sim p(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\frac{w(\lambda)}{p(\lambda)}\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]
+      p_\Lambda(\lambda)=\frac{1}{2\pi(t_1-t_0)}\mathrm{sech}\left(\frac{\lambda}{2}\right)
 \end{align}
-where $\mathcal{L}(\lambda)$ is the Kullback--Leibler divergence from the joint distributions $q$ to $p$ for a subset of timesteps from $t=f_\lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$; $w(\lambda)$ is a weighting function; and $p(\lambda)$ is determined by the training noise schedule---we can sample from $p(\lambda)$ by first sampling $t\sim\mathcal{U}(0, 1)$, then computing $\lambda=f_\lambda(t)$. The first term, $w(\lambda_{\min})\mathcal{L}(\lambda_{\min})$, is constant and close to zero for sufficiently small $\lambda_{\min}$. The second term, however, contains an intractable integral and thus is optimised via an importance-weighted Monte Carlo integrator in practice.
+\begin{figure}[htbp]
+      \centering
+      \begin{tikzpicture}
+      \begin{axis}[
+            xlabel=$\lambda$,
+            ylabel=$p_\Lambda(\lambda)$,
+            ylabel near ticks,
+            xlabel near ticks,
+            ylabel style={rotate=-90},
+            xmin=-30,
+            xmax=30,
+            ymin=0,
+            ymax=0.18,
+            width=.5\linewidth]
+      \addplot[color=red,thick,domain=-30:30,samples=300]{ (1 / cosh(x/2)) / (2 * pi * (2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))};
+      \end{axis}
+      \end{tikzpicture}
+      \caption{Probability density function $p_\Lambda(\lambda)$ for the same truncated continuous-time $\alpha$-cosine schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is the log signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$; the vertical axis is the corresponding probability density $p_\Lambda$.}
+      \label{fig:p_lambda}
+\end{figure}
 
-Minimisation of the various loss functions used to optimise diffusion models in the literature equates to minimisation of $\mathcal{L}_w$, with specific choices of $p(\lambda)$ and $w(\lambda)$. Notably, uniform weighting with $w(\lambda)=1$ for all $\lambda\in[\lambda_{\min}, \lambda_{\max}]$ corresponds to maximisation of the evidence lower bound objective (ELBO). The ELBO---also sometimes known as the variational lower bound---is a lower bound of the log-likelihood of the data. More concretely:
-
-
+The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_parameterisation_loss} equates to the weighted loss $\mathcal{L}_w$ with:
+\begin{align}
+      w(\lambda)=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
+\end{align}
 
 
 \subsection{Reconstruction-Guided Sampling}
@@ -764,7 +826,7 @@ During training, we train the model to minimise:
       &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z})}\right)\right]\\
       &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
       &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p(\mathbf{z_1}))-\int_{\lambda_{\min}}^{\lambda_{\max}}\frac{d}{d\lambda}
+      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z_1}))-\int_{\lambda_{\min}}^{\lambda_{\max}}\frac{d}{d\lambda}
 \end{align}
 
 % =============================================================================
