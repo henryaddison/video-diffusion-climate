@@ -18,8 +18,8 @@ from rotary_embedding_torch import RotaryEmbedding
 
 from matplotlib import pyplot as plt
 
-# PR_MAX = 76.96769714355469
-PR_MAX = 8.773123741149902
+PR_MAX = 76.96769714355469
+# PR_MAX = 8.773123741149902
 PR_MIN = 0.
 
 # helpers functions
@@ -589,8 +589,8 @@ class GaussianDiffusion(nn.Module):
 
         # mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
         # sigma_st = (sigma_ts * sigma_s) / sigma_t
-        mu_st = torch.exp(lambda_t - lambda_s) * (alpha_s / alpha_t) * z_t + (1 - torch.exp(lambda_t - lambda_s)) * alpha_s * x
-        sigma_st = torch.sqrt((1 - torch.exp(lambda_t - lambda_s)) * sigma_s ** 2)
+        mu_st = torch.exp(lambda_t - lambda_s) * (alpha_s / alpha_t) * z_t + (-torch.expm1(lambda_t - lambda_s)) * alpha_s * x
+        sigma_st = torch.sqrt((-torch.expm1(lambda_t - lambda_s)) * sigma_s ** 2)
         
         return mu_st, sigma_st
 
@@ -646,7 +646,8 @@ class GaussianDiffusion(nn.Module):
         # Unnormalize
         samples = ((samples + 1) / 2) * (PR_MAX - PR_MIN) + PR_MIN
 
-        return torch.square(samples)
+        return samples
+        # return torch.square(samples)
 
     def sample_recon_guidance(self, x_a, indices_a):
         b = x_a.shape[0]

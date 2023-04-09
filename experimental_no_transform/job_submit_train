@@ -6,7 +6,7 @@
 #SBATCH --mem 124G
 #SBATCH --partition cnu
 #SBATCH --account COSC020762
-#SBATCH --output slurm_train_sqrt_lambda_30.out
+#SBATCH --output slurm_train_no_transform_lambda_30.out
 #SBATCH --exclude bp1-gpu031,bp1-gpu032
 
 echo Running on host `hostname`
