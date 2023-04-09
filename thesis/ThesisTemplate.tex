@@ -327,7 +327,7 @@ As mentioned in Section \ref{sec:background_generative}, the goal of a generativ
       &=\operatorname{argmin}_{\theta}\left(\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\right)\\
       &=\operatorname{argmin}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
-As such, minimisation of the KL divergence equates to minimisation of the negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ over $\mathbf{x}\sim p^*(\mathbf{x})$. We can analogously express this as maximisation of the log-likelihood:
+As such, minimisation of the KL divergence equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ over $\mathbf{x}\sim p^*(\mathbf{x})$. We can analogously express this as maximisation of the log-likelihood:
 \begin{align}
       \operatorname{argmax}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]
 \end{align}
@@ -602,6 +602,17 @@ This form provides several useful insights. We can see that the first term, the 
       &\simeq \frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2
 \end{align}
 where $p_\Lambda(\lambda)$ is determined by the training noise schedule---we can sample from $p_\Lambda(\lambda)$ by first sampling $t\sim\mathcal{U}(0, 1)$, then computing $\lambda=f_\lambda(t)$. 
+
+Notably, further analysis by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} shows that the weighted loss also has a likelihood-based interpretation. The fundamental theorem of calculus enables us to write the weighted loss as:
+\begin{align}
+      \mathcal{L}_w = w(\lambda_{\max})\mathcal{L}(\lambda_{\max}) + \int_{\lambda_{\min}}^{\lambda_{\max}}-w'(\lambda)\mathcal{L}(\lambda) d\lambda
+\end{align}
+The likelihood-based interpretation comes from the fact that $\mathcal{L}(\lambda)$ serves as a variational bound on the negative marginal likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$, plus a constant; this is given by:
+\begin{align}
+      \mathcal{L}(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
+      &=\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[-\log p(\mathbf{z}_t)\right]+\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[\log q(\mathbf{z}_t|\mathbf{x})\right]
+\end{align}
+As such, minimisation of $\mathcal{L}(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. For this reason, we use a monotonically decreasing weighting function in this work. In contrast, most diffusion models in the broader literature undergo training with non-monotonic weighting functions. In such cases, for noise levels whereby $-w'(\lambda)$ is negative, the weighted loss has a counterintuitive interpretation of minimisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$.
 
 An important observation made by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} is that the ELBO in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with:
 \begin{align}
