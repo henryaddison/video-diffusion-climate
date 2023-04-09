@@ -582,13 +582,15 @@ class GaussianDiffusion(nn.Module):
 
     def q_posterior(self, z_t, x, lambda_s, lambda_t):
         alpha_s, sigma_s = self.log_snr_to_alpha_sigma(lambda_s)
-        alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
+        alpha_t, _ = self.log_snr_to_alpha_sigma(lambda_t)
 
-        alpha_ts = alpha_t / alpha_s
-        sigma_ts = torch.sqrt(sigma_t ** 2 - alpha_ts ** 2 * sigma_s ** 2)
+        # alpha_ts = alpha_t / alpha_s
+        # sigma_ts = torch.sqrt(sigma_t ** 2 - alpha_ts ** 2 * sigma_s ** 2)
 
-        mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
-        sigma_st = (sigma_ts * sigma_s) / sigma_t
+        # mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
+        # sigma_st = (sigma_ts * sigma_s) / sigma_t
+        mu_st = torch.exp(lambda_t - lambda_s) * (alpha_s / alpha_t) * z_t + (1 - torch.exp(lambda_t - lambda_s)) * alpha_s * x
+        sigma_st = (1 - torch.exp(lambda_t - lambda_s)) * sigma_s ** 2
         
         return mu_st, sigma_st
 

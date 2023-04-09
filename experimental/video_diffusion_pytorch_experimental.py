@@ -564,6 +564,9 @@ class GaussianDiffusion(nn.Module):
         self.monotonic_net = MonotonicNet()
         self.omega_r = 100000 # Reconstruction-guided sampling
 
+        self.t0 = (2 / math.pi) * math.atan(math.exp(-(1 / 2) * 30))
+        self.t1 = (2 / math.pi) * math.atan(math.exp(-(1 / 2) * -30))
+
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
         t_min = math.atan(math.exp(-0.5 * log_snr_max))
@@ -583,13 +586,15 @@ class GaussianDiffusion(nn.Module):
 
     def q_posterior(self, z_t, x, lambda_s, lambda_t):
         alpha_s, sigma_s = self.log_snr_to_alpha_sigma(lambda_s)
-        alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
+        alpha_t, _ = self.log_snr_to_alpha_sigma(lambda_t)
 
-        alpha_ts = alpha_t / alpha_s
-        sigma_ts = torch.sqrt(sigma_t ** 2 - alpha_ts ** 2 * sigma_s ** 2)
+        # alpha_ts = alpha_t / alpha_s
+        # sigma_ts = torch.sqrt(sigma_t ** 2 - alpha_ts ** 2 * sigma_s ** 2)
 
-        mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
-        sigma_st = (sigma_ts * sigma_s) / sigma_t
+        # mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
+        # sigma_st = (sigma_ts * sigma_s) / sigma_t
+        mu_st = torch.exp(lambda_t - lambda_s) * (alpha_s / alpha_t) * z_t + (1 - torch.exp(lambda_t - lambda_s)) * alpha_s * x
+        sigma_st = (1 - torch.exp(lambda_t - lambda_s)) * sigma_s ** 2
         
         return mu_st, sigma_st
 
@@ -693,9 +698,9 @@ class GaussianDiffusion(nn.Module):
         diffusion_loss = F.mse_loss(v, v_target, reduction = 'none')
 
 
-        coef = - torch.exp(-lambda_t / 2) / (1 / torch.cosh(lambda_t / 2))
+        coef = 1 / (math.pi * (self.t1 - self.t0)) * torch.exp(-lambda_t / 2)
 
-        loss = (1 / 2) * diffusion_loss + coef * log_dy_dx
+        loss = diffusion_loss - 2 * coef * log_dy_dx
 
         loss = loss.mean()
         print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
