@@ -590,7 +590,7 @@ class GaussianDiffusion(nn.Module):
         # mu_st = ((alpha_ts * sigma_s ** 2) / sigma_t ** 2) * z_t + ((alpha_s * sigma_ts ** 2) / sigma_t ** 2) * x
         # sigma_st = (sigma_ts * sigma_s) / sigma_t
         mu_st = torch.exp(lambda_t - lambda_s) * (alpha_s / alpha_t) * z_t + (1 - torch.exp(lambda_t - lambda_s)) * alpha_s * x
-        sigma_st = (1 - torch.exp(lambda_t - lambda_s)) * sigma_s ** 2
+        sigma_st = torch.sqrt((1 - torch.exp(lambda_t - lambda_s)) * sigma_s ** 2)
         
         return mu_st, sigma_st
 
