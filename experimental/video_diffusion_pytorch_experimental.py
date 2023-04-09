@@ -538,10 +538,10 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_p_z_t.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_elbo.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
-        plt.savefig("monotonic_net_transform_p_z_t.png")
+        plt.savefig("monotonic_net_transform_elbo.png")
         plt.close()
 
 
@@ -674,7 +674,7 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         return alpha_t * x + sigma_t * noise
         
-    def p_losses(self, x):
+    def p_losses(self, x, step):
         b = x.shape[0]
 
         x.requires_grad = True
@@ -697,20 +697,22 @@ class GaussianDiffusion(nn.Module):
 
         diffusion_loss = F.mse_loss(v, v_target, reduction = 'none')
 
+        coef = math.pi * (self.t1 - self.t0) / 2 * torch.exp(lambda_t / 2)
 
-        coef = 1 / (math.pi * (self.t1 - self.t0)) * torch.exp(-lambda_t / 2)
-
-        loss = diffusion_loss - 2 * coef * log_dy_dx
+        if step <= 50000:
+            loss = coef * diffusion_loss - log_dy_dx
+        else:
+            loss = diffusion_loss
 
         loss = loss.mean()
         print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
 
         return loss
 
-    def forward(self, x):
+    def forward(self, x, step):
         x = 2 * ((x - PR_MIN) / (PR_MAX - PR_MIN)) # In the range [0, 2] just for better interpretability of log|dy / dx|
 
-        return self.p_losses(x)
+        return self.p_losses(x, step)
 
 
 class Dataset(data.Dataset):
@@ -820,7 +822,7 @@ class Trainer(object):
                     data = data.cuda()
 
                 with autocast(enabled = self.amp):
-                    loss = self.model(data)
+                    loss = self.model(data, self.step)
 
                     self.scaler.scale(loss / self.gradient_accumulate_every).backward()
 
@@ -830,6 +832,10 @@ class Trainer(object):
             self.scaler.update()
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
+
+            if self.step == 50000:
+                for param in self.model.monotonic_net.parameters():
+                    param.requires_grad = False
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
