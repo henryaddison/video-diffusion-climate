@@ -70,8 +70,9 @@
 % Packages added to original class
 \RequirePackage{pgfplots}
 \RequirePackage{subcaption}
-
 \usetikzlibrary{arrows}
+\DeclareMathOperator*{\argmax}{arg\,max\,}
+\DeclareMathOperator*{\argmin}{arg\,min\,}
 
 % =============================================================================
 

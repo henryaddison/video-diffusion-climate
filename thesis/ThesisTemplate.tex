@@ -249,7 +249,7 @@
 \chapter{Introduction}
 \label{chap:introduction}
 
-\chapter{Background}
+\chapter{Technical Background}
 \label{chap:background}
 
 \section{Generative Models}
@@ -259,20 +259,52 @@ Let us consider some dataset $\mathcal{D}$ consisting of $N_{\mathcal{D}}\ge1$ d
 \begin{align}
       \mathcal{D}=\{\mathbf{x}^{(i)}\mid 1 \le i \le N_{\mathcal{D}}, i \in \mathbb{N} \}
 \end{align}
-We assume each observed datapoint $\mathbf{x}\in\mathcal{D}$ is a random sample from an underlying process, whose true distribution $p^*(\mathbf{x})$ is unknown. The goal of \textit{generative modelling} is to approximate this true distribution with a chosen model $p_\theta(\mathbf{x})$ with parameters $\theta$. We learn parameters $\mathbf{\theta}$ such that the probability distribution function given by the model $p_\theta(\mathbf{x})$ approximates the true distribution of the data, such that for any observed $\mathbf{x}\in\mathcal{D}$, we have:
+We assume each observed datapoint $\mathbf{x}^{(i)}\in\mathcal{D}$ is a realisation of the observed random variable $\mathbf{x}$ from an underlying process, whose true distribution $p^*(\mathbf{x})$ is unknown. We will omit the index $(i)$ whenever it is clear we are referring to a single datapoint. The goal of \textit{generative modelling} is to approximate this true distribution with a chosen model $p_\theta(\mathbf{x})$ with parameters $\theta$. We learn parameters $\mathbf{\theta}$ such that the probability distribution function given by the model $p_\theta(\mathbf{x})$ approximates the true distribution of the data, such that:
 \begin{align}
       p_\theta(\mathbf{x}) \approx p^*(\mathbf{x})
 \end{align}
-Once learned, we can \textit{generate} new samples unconditionally from our approximate model at will.
+Once learnt, we can \textit{generate} new samples unconditionally from our approximate model at will.
 
 \section{Latent Variables}
 \label{sec:background_latent}
 
-We can think of each observed datapoint $\mathbf{x}\in\mathcal{D}$ as being represented or generated via one or more associated \textit{latent variables} $\mathbf{z}$. The latent variables are part of the model, but we do not observe them directly, and they are not within the dataset. We model the joint distribution of the observed data $\mathbf{x}$ and the latent variables $\mathbf{z}$ by $p_\theta(\mathbf{x},\mathbf{z})$; the marginal distribution over the observed variable $p_\theta(\mathbf{x})$ is given by:
+We can think of each observed datapoint $\mathbf{x}\in\mathcal{D}$ as being represented or generated via one or more associated \textit{latent variables}, typically denoted $\mathbf{z}$. The latent variables are part of the model, but we do not observe them directly, and they are not within the dataset. We model the joint distribution of the observed variable $\mathbf{x}$ and the latent variables $\mathbf{z}$ by $p_\theta(\mathbf{x},\mathbf{z})$; the marginal distribution over the observed variable $p_\theta(\mathbf{x})$ is given by:
 \begin{align}
       p_\theta(\mathbf{x})=\int p_\theta(\mathbf{x},\mathbf{z}) d\mathbf{z}
 \end{align}
-In this work, the conditional dependencies between the observed variable $\mathbf{x}$ and the latent variables $\mathbf{z}$ are either parameterised using a neural network or explicitly defined. 
+In the context of a latent-variable model, \textit{generation} refers to the process of sampling the latent variables $\mathbf{z}$ from some prior $p_\theta(\mathbf{z})$, and then sampling the observed variable $\mathbf{x}$ from the likelihood $p_\theta(\mathbf{x}|\mathbf{z})$.
+
+\section{Likelihood-Based Generative Models}
+\label{sec:background_unbiased_objective}
+
+As mentioned in Section \ref{sec:background_generative}, the goal of a generative model is to learn parameters $\theta$ such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$. One way to interpret this is as a minimisation problem. Namely, we wish to learn parameters $\theta$ that minimise the Kullback--Leibler (KL) divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$:
+\begin{align}
+      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))
+\end{align}
+The KL divergence, denoted $D_{KL}$, measures the dissimilarity between two probability distributions; in our case, it provides a measure of the information lost when we approximate the true distribution $p^*(\mathbf{x})$ with our model distribution $p_\theta(\mathbf{x})$.
+
+We can reformulate the KL divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$ to provide a likelihood-based interpretation:
+\begin{align}
+      D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log\left(\frac{p^*(\mathbf{x})}{p_\theta(\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
+      &=-\mathcal{H}(p^*(\mathbf{x}))+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
+\end{align}
+where $\mathcal{H}{(p^*(\mathbf{x}))}$ is the entropy of the true distribution $p^*(\mathbf{x})$ and is constant. As such, minimisation of the KL divergence in this context equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. We can equivalently interpret this as maximisation of the expected log-likelihood:
+\begin{align}
+      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\argmin_\theta \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
+      &=\argmax_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]
+\end{align}
+Under the assumption that each of the $N_\mathcal{D}$ samples in our dataset $\mathcal{D}$ are i.i.d. according to $p^*(\mathbf{x})$, we can construct an unbiased estimator:
+\begin{align}
+      \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\simeq \frac{1}{N_{\mathcal{D}}}\log p_\theta(\mathcal{D}) = \frac{1}{N_{\mathcal{D}}} \sum_{\mathbf{x}\in\mathcal{D}} \log p_\theta(\mathbf{x})
+\end{align}
+In other words, under the i.i.d assumption of $\mathcal{D}$, the mean log-likelihood of our model with respect to $\mathcal{D}$ serves as an unbiased estimator of the expected log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. In practice, for computational efficiency reasons---as well as GPU memory limitations---we learn via mini-batches $\mathcal{M}\subset \mathcal{D}$ of size $N_\mathcal{M} < N_\mathcal{D}$, which is itself an unbiased estimator:
+\begin{align}
+      \frac{1}{N_\mathcal{D}}\log p_\theta(\mathcal{D})\simeq \frac{1}{N_\mathcal{M}}\log p_\theta(\mathcal{M})=\frac{1}{N_\mathcal{M}}\sum_{\mathbf{x}\in\mathcal{M}}\log p_\theta(\mathbf{x})
+\end{align}
+As such, by transitivity the mean log-likelihood of our model with respect to each mini-batch $\mathcal{M}$ is itself an unbiased estimator of the expected log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$.
+
+We refer to the broad class of generative models trained to maximise the expected log-likelihood of $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$ as \textit{likelihood-based generative models}.
 
 \section{Variational Autoencoders}
 \label{sec:background_vae}
@@ -282,7 +314,7 @@ In this work, the conditional dependencies between the observed variable $\mathb
 \subsection{Overview}
 \label{sec:background_vae_latent}
 
-The variational autoencoder (VAE) \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} is one example of a model that utilises latent variables. In its simplest form, the VAE is a latent-variable model $p_\theta(\mathbf{x},\mathbf{z})$ with a single latent $\mathbf{z}$. We assume that each observed variable $\mathbf{x}\in\mathcal{D}$ is generated via a two-step process. First, a latent $\mathbf{z}$ is generated from some true prior distribution $p^*(\mathbf{z})$, followed by an observed value $\mathbf{x}$ generated from some true conditional distribution $p^*(\mathbf{x}|\mathbf{z})$. 
+The variational autoencoder (VAE) \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} is one example of a model that utilises latent variables. In its simplest form, the VAE is a latent-variable model $p_\theta(\mathbf{x},\mathbf{z})$ with a single latent $\mathbf{z}$. We assume that each observed datapoint $\mathbf{x}\in\mathcal{D}$ is generated via a two-step process. First, a latent $\mathbf{z}$ is generated from some true prior distribution $p^*(\mathbf{z})$, followed by an observed value $\mathbf{x}$ generated from some true conditional distribution $p^*(\mathbf{x}|\mathbf{z})$. 
 
 ur model takes the form:
 \begin{align}
@@ -313,33 +345,22 @@ $p_\theta(\mathbf{x}|\mathbf{z})$ and $q_\phi(\mathbf{z}|\mathbf{x})$ are often 
             (x) edge [bend left, dashed] node[above] {$q_\phi(\mathbf{z}|\mathbf{x})$} (z)
             (z) edge [bend left] node[below] {$p_\theta(\mathbf{x}|\mathbf{z})$} (x);
       \end{tikzpicture}
-      \caption{Graphical depiction of a VAE}
+      \caption{Graphical depiction of basic VAE with one observed variable $\mathbf{x}$ and one latent variable $\mathbf{z}$. Solid lines depict the Bayesian network of the generative model; dashed lines depict the Bayesian network of the approximate inference model.}
       \label{fig:vae}
 \end{figure}
+
+
 
 
 \subsection{Evidence Lower Bound Objective}
 \label{sec:background_vae_elbo}
 
-As mentioned in Section \ref{sec:background_generative}, the goal of a generative model, such as a VAE, is to learn parameters $\theta$ such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$. One way to represent this is as a minimisation problem. Mathematically, we wish to learn parameters $\theta$ that minimise the Kullback--Leibler (KL) divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$, which gives us:
+For the basic VAE with a single latent variable, we sample from $p_\theta(\mathbf{x})$ by first sampling the latent $\mathbf{z}$ from some prior $p_\theta(\mathbf{z})$ and then sampling $\mathbf{x}$ from $p_\theta(\mathbf{x}|\mathbf{z})$; this defines a generative model of the form:
 \begin{align}
-      \operatorname{argmin}_{\theta} D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\operatorname{argmin}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log\left(\frac{p^*(\mathbf{x})}{p_\theta(\mathbf{x})}\right)\right]\\
-      &=\operatorname{argmin}_{\theta}\left(\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\right)\\
-      &=\operatorname{argmin}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
+      p_\theta(\mathbf{x}) = \int p_\theta(\mathbf{x}|\mathbf{z})p_\theta(\mathbf{z}) d\mathbf{z}
 \end{align}
-As such, minimisation of the KL divergence equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ over $\mathbf{x}\sim p^*(\mathbf{x})$. We can analogously express this as maximisation of the log-likelihood:
-\begin{align}
-      \operatorname{argmax}_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]
-\end{align}
-Moreover, under the assumption that each of the $N_\mathcal{D}$ samples in our dataset $\mathcal{D}$ are i.i.d. according to $p^*(\mathbf{x})$, we have:
-\begin{align}
-      \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\simeq \frac{1}{N_{\mathcal{D}}}\log p_\theta(\mathcal{D}) = \frac{1}{N_{\mathcal{D}}} \sum_{\mathbf{x}\in\mathcal{D}} \log p_\theta(\mathbf{x})
-\end{align}
-In other words, under the i.i.d assumption of $\mathcal{D}$, the mean log-likelihood of our model over $\mathcal{D}$ is an unbiased estimator of the expected log-likelihood of our model over $\mathbf{x}\sim p^*(\mathbf{x})$. In practice, for computational efficiency reasons---as well as GPU memory limitations---we learn via mini-batches $\mathcal{M}\subset \mathcal{D}$ of size $N_\mathcal{M} < N_\mathcal{D}$:
-\begin{align}
-      \frac{1}{N_\mathcal{D}}\log p_\theta(\mathcal{D})\simeq \frac{1}{N_\mathcal{M}}\log p_\theta(\mathcal{M})=\frac{1}{N_\mathcal{M}}\sum_{\mathbf{x}\in\mathcal{M}}\log p_\theta(\mathbf{x})
-\end{align}
-As such, by transitivity the mean log-likelihood of our model over each mini-batch $\mathcal{M}$ is itself an unbiased estimator of the expected log-likelihood of our model over $\mathbf{x}\sim p^*(\mathbf{x})$.
+However, 
+
 
 
 Firstly, we cannot simply marginalise out the latent variable $\mathbf{z}$ via:
@@ -355,17 +376,32 @@ since it requires access to a ground truth latent encoder $p_\theta(\mathbf{z}|\
 
 
 \begin{align}
-      \log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\\
-      &\ge \mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
+      \log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q_\phi(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q_\phi(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))
+      \label{eq:vae_elbo}
+      % &\ge \mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
 \end{align}
+The second term in Equation \ref{eq:vae_elbo} is the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ and $p_\theta(\mathbf{z}|\mathbf{x})$ and is non-negative:
+\begin{align}
+      D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\ge 0
+\end{align}
+and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the \textit{evidence lower bound objective} (ELBO), and by the non-negativity of the KL divergence, serves as a lower bound on the log-likelihood of the observed variable $\mathbf{x}$:
+\begin{align}
+      \log p_\theta(\mathbf{x})&\ge \mathrm{ELBO}(\mathbf{x})\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
+\end{align}
+As such, maximisation of the ELBO accomplishes two things. Firstly, it will approximately maximise the log-likelihood of the observed variable $\mathbf{x}$---the overriding goal of a likelihood-based generative model. Secondly, it will minimise the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ from $p_\theta(\mathbf{z}|\mathbf{x})$, thus encouraging the approximate posterior $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ as closely as possible. 
+
+\subsection{Hierarchical Variational Autoencoders}
+\label{sec:background_vae_hierarchical}
+
 
 
 \subsection{Markovian Hierarchical Variational Autoencoders}
-\label{sec:background_vae_hierarchical}
+\label{sec:background_vae_markovian_hierarchical}
 
 \begin{figure}[htbp]
       \centering
@@ -386,10 +422,12 @@ since it requires access to a ground truth latent encoder $p_\theta(\mathbf{z}|\
             (z2) edge [bend left, dashed] node[above] {$q_\phi(\mathbf{z}_3|\mathbf{z}_2)$} (z3)
             (z3) edge [bend left] node[below] {$p_\theta(\mathbf{z}_2|\mathbf{z}_3)$} (z2);
       \end{tikzpicture}
-      \caption{Graphical depiction of a hierarchical VAE}
+      \caption{Graphical depiction of Markovian hierarchical VAE with one observed variable $\mathbf{x}$ and three latent variables $\mathbf{z}_1$, $\mathbf{z}_2$ and $\mathbf{z}_3$. Solid lines depict the Bayesian network of the generative model; dashed lines depict the Bayesian network of the approximate inference model.}
       \label{fig:hvae}
 \end{figure}
 
+\section{Score-Based Generative Models}
+\label{sec:background_score}
 
 \section{Diffusion Models}
 \label{sec:background_diffusion}
@@ -415,6 +453,34 @@ where $\alpha_t$ and $\sigma_t$ are strictly positive scalar-valued functions of
       q(\mathbf{z}_t|\mathbf{z}_s,\mathbf{z}_r)&=q(\mathbf{z}_t|\mathbf{z}_s)=\mathcal{N}\left(\mathbf{z}_t; \alpha_{t|s}\mathbf{z}_s, \sigma_{t|s}^2\mathbf{I}\right)
 \end{align}
 where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha_{t|s}^2\sigma_s^2$. A full derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$ is given in Appendix \ref{appx:diffusion_q_z_t_given_z_s}.
+
+\subsection{Generative Model}
+\label{sec:background_diffusion_reverse}
+
+The generative model is a learned hierarchical model that matches the forward process running in reverse-time: in $T$ uniformly-spaced discrete timesteps, we sequentially generate latent variables, starting from $t=1$ and working backwards to $t=0$. More formally, our hierarchical generative model defines a joint distribution over latent variables:
+\begin{align}
+      p_\theta(\mathbf{z})=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
+\end{align}
+where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. 
+
+For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
+\begin{align}
+      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))\approx 0
+\end{align}
+In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
+\begin{align}
+      p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
+\end{align}
+Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
+\begin{align}
+      p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
+      &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
+\end{align}
+where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate of the original data $\mathbf{x}$ given latent $\mathbf{z}_t$ and log signal-to-noise ratio $\lambda_t$, and
+\begin{align}
+      \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
+      \tilde{\sigma}_{s|t}&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
+\end{align}
 
 \subsection{Noise Schedule}
 \label{sec:background_diffusion_noise_schedule}
@@ -503,35 +569,6 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
       \caption{Relationship between time $t$ and $\alpha_t$ (left) and $\sigma_t$ (right) for the same truncated continuous-time $\alpha$-cosine noise schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is time $t\in[0,1]$; the vertical axis is the value of $\alpha_t$ (left) and $\sigma_t$ (right).}
       \label{fig:cosine_alpha_sigma}
 \end{figure}
-
-\subsection{Generative Model}
-\label{sec:background_diffusion_reverse}
-
-The \textit{generative model} is a learned hierarchical model that matches the forward process running in reverse-time: in $T$ uniformly-spaced discrete timesteps, we sequentially generate latent variables, starting from $t=1$ and working backwards to $t=0$. More formally, our hierarchical generative model defines a joint distribution over latent variables:
-\begin{align}
-      p_\theta(\mathbf{z})=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
-\end{align}
-where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. 
-
-For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
-\begin{align}
-      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))\approx 0
-\end{align}
-where $D_{KL}$ is the Kullback--Leibler divergence. In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
-\begin{align}
-      p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
-\end{align}
-
-Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
-\begin{align}
-      p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
-      &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
-\end{align}
-where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate of the original data $\mathbf{x}$ given latent $\mathbf{z}_t$ and log signal-to-noise ratio $\lambda_t$, and
-\begin{align}
-      \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
-      \tilde{\sigma}_{s|t}^2&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
-\end{align}
 
 \subsection{Parameterisations}
 \label{sec:background_diffusion_parameterisations}
@@ -652,12 +689,14 @@ The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_pa
       w(\lambda)=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
 \end{align}
 
-
 \subsection{Reconstruction-Guided Sampling}
 \label{sec:background_diffusion_reconstruction_guided_sampling}
 
-\section{Climate Simulations}
-\label{sec:background_climate}
+\subsection{U-Net}
+\label{sec:background_unet}
+
+\chapter{Climate Background}
+\label{chap:background_climate}
 
 % -----------------------------------------------------------------------------
 
@@ -820,24 +859,6 @@ As such:
 During training, we train the model to minimise:
 \begin{align}
       \mathbb{E}_{\mathbf{x},\boldsymbol\epsilon, t}\left[\Vert\mathbf{v}_t-\hat{\mathbf{v}}_\theta(\mathbf{z}_t, \lambda_t)\Vert_2^2\right]
-\end{align}
-
-\section{Relationship Between the ELBO and Weighted Loss}
-\label{appx:diffusion_elbo_weighted_loss}
-
-\begin{align}
-      \log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\\
-      &\ge \mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x}|\mathbf{z})p_\theta(\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]+\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z})\right]-D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))-\int_{\lambda_{\min}}^{\lambda_{\max}}\frac{d}{d\lambda}
 \end{align}
 
 % =============================================================================
