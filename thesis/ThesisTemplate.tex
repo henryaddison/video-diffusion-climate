@@ -259,11 +259,26 @@ Let us consider some dataset $\mathcal{D}$ consisting of $N_{\mathcal{D}}\ge1$ d
 \begin{align}
       \mathcal{D}=\{\mathbf{x}^{(i)}\mid 1 \le i \le N_{\mathcal{D}}, i \in \mathbb{N} \}
 \end{align}
-We assume each observed datapoint $\mathbf{x}^{(i)}\in\mathcal{D}$ is a realisation of the observed random variable $\mathbf{x}$ from an underlying process, whose true distribution $p^*(\mathbf{x})$ is unknown. We will omit the index $(i)$ whenever it is clear we are referring to a single datapoint. The goal of \textit{generative modelling} is to approximate this true distribution with a chosen model $p_\theta(\mathbf{x})$ with parameters $\theta$. We learn parameters $\mathbf{\theta}$ such that the probability distribution function given by the model $p_\theta(\mathbf{x})$ approximates the true distribution of the data, such that:
+We assume each observed datapoint $\mathbf{x}^{(i)}\in\mathcal{D}$ is a realisation of the observed random variable $\mathbf{x}$ from an underlying process, whose true distribution $p^*(\mathbf{x})$ is unknown. We will omit the index $(i)$ whenever it is clear we are referring to a single datapoint. The goal of \textit{generative modelling} is to approximate this true distribution with a chosen model $p_\theta(\mathbf{x})$ with parameters $\theta$. We learn parameters $\mathbf{\theta}$ such that the probability distribution function given by the model $p_\theta(\mathbf{x})$ approximates the true distribution of the data, such that for any observed $\mathbf{x}$:
 \begin{align}
       p_\theta(\mathbf{x}) \approx p^*(\mathbf{x})
 \end{align}
-Once learnt, we can \textit{generate} new samples unconditionally from our approximate model at will.
+Once learnt, we can generate new samples \textit{unconditionally} from our approximate model at will. We thus refer to the model $p_\theta(\mathbf{x})$ as an unconditional generative model.
+
+\section{Conditional Generation}
+\label{sec:background_conditional}
+
+We can extend generative modelling to the conditional setting. We consider each observed $\mathbf{x}$ to have some corresponding conditioning information $\mathbf{c}$. In this context, we wish to approximate the conditional distribution $p^*(\mathbf{x}|\mathbf{c})$. Similar to the unconditional setting, we learn parameters $\theta$ for our model $p_\theta(\mathbf{x}|\mathbf{c})$ such that for any observed $\mathbf{x}$ and conditioning information $\mathbf{c}$:
+\begin{align}
+      p_\theta(\mathbf{x}|\mathbf{c})\approx p^*(\mathbf{x}|\mathbf{c})
+\end{align}
+Once learnt, we can generate new samples \textit{conditionally} from our approximate model at will.
+
+One of the most basic cases is a class-conditional generative model, where the conditioning variable $\mathbf{c}$ is simply a class label. In such cases, our conditional model $p_\theta(\mathbf{x}|\mathbf{c})$ has an interpretation as the reverse of a discriminative classification model---a more traditional form of machine learning. As opposed to inputting an observed $\mathbf{x}$ and the model outputting the predicted corresponding class label $\mathbf{c}$, we input a class label $\mathbf{c}$ and use the model to generate a new sample $\mathbf{x}\sim p_\theta(\mathbf{x}|\mathbf{c})$.
+
+Significantly, the conditioning variable $\mathbf{c}$ is not limited to class labels; it can be flexible and take the form of any additional information we wish to condition on to generate samples. A powerful tool in the case of image generation, $\mathbf{c}$ may be a text encoding to facilitate text-to-image synthesis (see e.g. \cite{Imagen_Saharia,Simple_Diffusion_Hoogeboom}). Alternatively, $\mathbf{c}$ may be a lower-resolution image from which we wish to upscale to add higher-resolution details, known as image super-resolution (see e.g. \cite{Cascaded_Ho}).
+
+In this work, we do not explicitly use a conditional model. However, we do derive one approximately from an unconditional model. We discuss this further in Section \ref{sec:background_diffusion_reconstruction_guided_sampling}.
 
 \section{Latent Variables}
 \label{sec:background_latent}
@@ -309,8 +324,6 @@ We refer to the broad class of generative models trained to maximise the expecte
 \section{Variational Autoencoders}
 \label{sec:background_vae}
 
-% The broader literature contains several well-known approaches to learning a model $p_\theta(\mathbf{x})$. Likelihood-based generative modelling, for example, seeks to learn a model that assigns a high likelihood to the observed datapoints $\mathcal{D}$. Variational autoencoders (VAEs) \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} are one such type of likelihood-based generative model.
-
 \subsection{Overview}
 \label{sec:background_vae_latent}
 
@@ -324,7 +337,7 @@ The prior $p_\theta(\mathbf{z})$ over the latent variable is often chosen to be 
 \begin{align}
       p_\theta(\mathbf{z})=\mathcal{N}(\mathbf{z};\mathbf{0}, \mathbf{I})
 \end{align}
-The true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, but we commonly assume it takes on the form of a multivariate Gaussian with diagonal covariance. As such, we introduce an a variational approximate posterior, defined as:
+The true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, but we commonly assume it takes on the form of a multivariate Gaussian with diagonal covariance. As such, we introduce a variational approximate posterior, defined as:
 \begin{align}
       q_\phi(\mathbf{z}|\mathbf{x})=\mathcal{N}(\mathbf{z}, \boldsymbol{\mu}_\phi(\mathbf{z}), \mathrm{diag}(\boldsymbol\sigma_\phi(\mathbf{z}))^{\circ 2})
 \end{align}
@@ -348,9 +361,6 @@ $p_\theta(\mathbf{x}|\mathbf{z})$ and $q_\phi(\mathbf{z}|\mathbf{x})$ are often 
       \caption{Graphical depiction of basic VAE with one observed variable $\mathbf{x}$ and one latent variable $\mathbf{z}$. Solid lines depict the Bayesian network of the generative model; dashed lines depict the Bayesian network of the approximate inference model.}
       \label{fig:vae}
 \end{figure}
-
-
-
 
 \subsection{Evidence Lower Bound Objective}
 \label{sec:background_vae_elbo}
@@ -429,17 +439,56 @@ As such, maximisation of the ELBO accomplishes two things. Firstly, it will appr
 \section{Score-Based Generative Models}
 \label{sec:background_score}
 
+\subsection{Score Networks}
+\label{sec:background_score_score_network}
+
+Score-based generative models \cite{Generative_Modelling_By_Estimating_Gradients_Song,Score_Based_Song} are an alternative to likelihood-based generative models. We define the $score$ of a probability density $p(\mathbf{x})$ to be:
+\begin{align}
+      \nabla_{\mathbf{x}} \log p(\mathbf{x})
+\end{align}
+The \textit{score network} $\mathbf{s}_\theta$ is a neural network parameterised by $\theta$ trained to approximate the score of the true data distribution $p^*(\mathbf{x})$, such that for any observed $\mathbf{x}$:
+\begin{align}
+      \mathbf{s}_\theta(\mathbf{x})\approx \nabla_{\mathbf{x}} \log p^*(\mathbf{x})
+\end{align}
+Importantly, we accomplish this without training a model to directly approximate the true data distribution $p^*(\mathbf{x})$ in advance.
+
+\subsection{Example: Denoising Score Matching with Langevin Dynamics}
+\label{sec:background_score_denoising}
+
+Denoising score matching with Langevin dynamics (SMLD) \cite{Generative_Modelling_By_Estimating_Gradients_Song} is an example of a score-based generative model that enables us to generate data starting from Gaussian noise. While we do not use SMLD explicitly in this work, we introduce it here to better motivate techniques employed in the diffusion model described in Section \ref{sec:background_diffusion}. We introduce SMLD in continuous time. Let us consider a set of positive noise scales:
+\begin{align}
+      \{ \sigma_t \mid t\in[0,1] \}
+\end{align}
+such that $\sigma_t$ is a strictly monotonically increasing function of time $t\in[0,1]$. For each noise scale $\sigma_t$, we define a corresponding Gaussian noise perturbation kernel:
+\begin{align}
+      q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t; \mathbf{x}, \sigma_t^2\mathbf{I}\right)
+\end{align}
+For all $t\in[0,1]$ the marginal distribution $q(\mathbf{z}_t)$ is given by:
+\begin{align}
+      q(\mathbf{z}_t)=\int p^*(\mathbf{x})q(\mathbf{z}_t|\mathbf{x})
+\end{align}
+We define $\sigma_0 = \sigma_{\min}$ and $\sigma_1 = \sigma_{\max}$ such that:
+\begin{align}
+      q(\mathbf{z}_0)&\approx p^*(\mathbf{x})\\
+      q(\mathbf{z}_1)&\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \sigma_{1}^2\mathbf{I})
+\end{align}
+We train a noise-conditional score network $\mathbf{s}_\theta(\mathbf{z}_t, \sigma)$ such that:
+\begin{align}
+      \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t|\mathbf{x})
+\end{align}
+For our generative model, we start by sampling $\mathbf{z}_1\sim \mathcal{N}(\mathbf{z}_1; \mathbf{0}, \sigma_{1}^2\mathbf{I})$ from an isotropic Gaussian distribution with variance $\sigma_1^2=\sigma_{\max}^2$. Then, we sequentially generate $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$ via Langevin Markov chain Monte Carlo:
+\begin{align}
+      \mathbf{z}_s = \mathbf{z}_t + \frac{1}{2}\tau_t \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)+\sqrt{\tau_t}\boldsymbol\epsilon
+\end{align}
+where $\tau_t>0$ is a pre-defined time-dependent step size and $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise.
+
 \section{Diffusion Models}
 \label{sec:background_diffusion}
-
-Diffusion models are 
-
-Given observed datapoints $\mathbf{x}$, the goal of a generative model is to learn to model its true data distribution $q(\mathbf{x})$.
 
 \subsection{Forward Diffusion Process}
 \label{sec:background_diffusion_forward}
 
-The \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
+Specified in continuous time, the \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
 \begin{align}
       \mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
@@ -573,11 +622,11 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
 \subsection{Parameterisations}
 \label{sec:background_diffusion_parameterisations}
 
-In Section \ref{sec:background_diffusion_reverse}, we defined our generative model $p_\theta(\mathbf{x})$ using $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$, which takes as input some noisy latent variable $\mathbf{z}_t$ and a log signal-to-noise ratio $\lambda_t$ and outputs a denoised estimate of the latent. Training a neural network to predict $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t, \lambda_t)$ directly is referred to as the $\mathbf{x}$-prediction parameterisation, but is seldom adopted in the broader literature due to sub-optimal results \cite{DDPM_Ho}. Recent diffusion models have instead adopted different parameterisations, most commonly the $\boldsymbol\epsilon$-prediction parameterisation (e.g. \cite{DDPM_Ho,Cascaded_Ho,Imagen_Saharia}), wherein a neural network is instead trained to predict the noise $\boldsymbol\epsilon\approx\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)$, from which we can compute a denoised estimate of noisy latent $\mathbf{z}_t$ via:
+In Section \ref{sec:background_diffusion_reverse}, we defined our generative model $p_\theta(\mathbf{x})$ using $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$, which takes as input some noisy latent variable $\mathbf{z}_t$ and a log signal-to-noise ratio $\lambda_t$ and outputs a denoised estimate of the latent. Training a neural network to predict $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t, \lambda_t)$ directly is referred to as the $\mathbf{x}$-prediction parameterisation, but is seldom adopted in the broader literature due to sub-optimal results \cite{DDPM_Ho}. Recent diffusion models have instead adopted different parameterisations, most commonly the $\boldsymbol\epsilon$-prediction parameterisation (see e.g. \cite{DDPM_Ho,Cascaded_Ho,Imagen_Saharia}), wherein a neural network is instead trained to predict the noise $\boldsymbol\epsilon\approx\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)$, from which we can compute a denoised estimate of noisy latent $\mathbf{z}_t$ via:
 \begin{align}
       \hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)=\frac{1}{\alpha_t}\left(\mathbf{z}_t-\sigma_t\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda_t)\right)
 \end{align}
-In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was introduced initially to facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}, namely faster convergence of sample quality and prevention of temporal colour shifting sometimes observed with $\boldsymbol\epsilon$-prediction video diffusion models. 
+In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (see e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was introduced initially to facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}, namely faster convergence of sample quality and prevention of temporal colour shifting sometimes observed with $\boldsymbol\epsilon$-prediction video diffusion models. 
 
 Formally, for a given datapoint $\mathbf{x}\sim q(\mathbf{x})$  we define the velocity of $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ as:
 \begin{align}
@@ -592,6 +641,11 @@ During discrete-time ancestral sampling, we convert our estimate $\mathbf{v}_t\a
       \hat{\mathbf{x}}(\mathbf{z}_t,\lambda_t)=\alpha_t\mathbf{z}_t-\sigma_t\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)
 \end{align}
 Appendix \ref{appx:diffusion_v_prediction_parameterisation} provides further details on the $\mathbf{v}$-prediction parameterisation, including derivations of the velocity and denoised latent.
+
+\subsection{Score-Based Interpretation}
+
+During discrete-time ancestral sampling, 
+
 
 \subsection{ELBO for Diffusion Models}
 \label{sec:background_diffusion_elbo}
@@ -649,7 +703,7 @@ The likelihood-based interpretation comes from the fact that $\mathcal{L}(\lambd
       \mathcal{L}(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
       &=\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[-\log p(\mathbf{z}_t)\right]+\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[\log q(\mathbf{z}_t|\mathbf{x})\right]
 \end{align}
-As such, minimisation of $\mathcal{L}(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. For this reason, we use a monotonically decreasing weighting function in this work. In contrast, most diffusion models in the broader literature (e.g. \cite{DDPM_Ho,IDDPM_Nichol,Imagen_Saharia}) undergo training with non-monotonic weighting functions. In such cases, for noise levels whereby $-w'(\lambda)$ is negative, the weighted loss has a counterintuitive interpretation of minimisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$.
+As such, minimisation of $\mathcal{L}(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. For this reason, we use a monotonically decreasing weighting function in this work. In contrast, most diffusion models in the broader literature (see e.g. \cite{DDPM_Ho,IDDPM_Nichol,Imagen_Saharia}) undergo training with non-monotonic weighting functions. In such cases, for noise levels whereby $-w'(\lambda)$ is negative, the weighted loss has a counterintuitive interpretation of minimisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$.
 
 An important observation made by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} is that the ELBO in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with:
 \begin{align}
@@ -688,6 +742,9 @@ The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_pa
 \begin{align}
       w(\lambda)=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
 \end{align}
+
+\subsection{Replacement Sampling}
+\label{sec:background_diffusion_replacement_sampling}
 
 \subsection{Reconstruction-Guided Sampling}
 \label{sec:background_diffusion_reconstruction_guided_sampling}
@@ -792,7 +849,7 @@ As such, we define our noise schedule before truncation $\tilde{f}_\lambda$ for 
       &=\log\left(\frac{\cos^2\left(\frac{\pi}{2}t\right)}{\sin^2\left(\frac{\pi}{2}t\right)}\right)\\
       &=-2\log\left(\tan\left(\frac{\pi}{2}t\right)\right)
 \end{align}
-However, the above noise schedule means that $\tilde{f}_\lambda:[0,1]\to[-\infty, \infty]$; in simpler terms, $\lambda_t$ is unbounded. We follow prior work (e.g. \cite{Simple_Diffusion_Hoogeboom,VDM_Ho}) by truncating $\lambda_t$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$. To do so, we first need to define the inverse of the unbounded noise schedule:
+However, the above noise schedule means that $\tilde{f}_\lambda:[0,1]\to[-\infty, \infty]$; in simpler terms, $\lambda_t$ is unbounded. We follow prior work (see e.g. \cite{Simple_Diffusion_Hoogeboom,VDM_Ho}) by truncating $\lambda_t$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$. To do so, we first need to define the inverse of the unbounded noise schedule:
 \begin{align}
       \tilde{f}_\lambda^{-1}(\lambda)=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda\right)\right)
 \end{align}
