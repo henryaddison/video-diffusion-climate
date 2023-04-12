@@ -474,7 +474,7 @@ We define $\sigma_0 = \sigma_{\min}$ and $\sigma_1 = \sigma_{\max}$ such that:
 \end{align}
 We train a noise-conditional score network $\mathbf{s}_\theta(\mathbf{z}_t, \sigma)$ such that:
 \begin{align}
-      \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t|\mathbf{x})
+      \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)
 \end{align}
 For our generative model, we start by sampling $\mathbf{z}_1\sim \mathcal{N}(\mathbf{z}_1; \mathbf{0}, \sigma_{1}^2\mathbf{I})$ from an isotropic Gaussian distribution with variance $\sigma_1^2=\sigma_{\max}^2$. Then, we sequentially generate $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$ via Langevin Markov chain Monte Carlo:
 \begin{align}
@@ -488,16 +488,31 @@ where $\tau_t>0$ is a pre-defined time-dependent step size and $\boldsymbol\epsi
 \subsection{Forward Diffusion Process}
 \label{sec:background_diffusion_forward}
 
-Specified in continuous time, the \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the \textit{latent variables}:
+Specified in continuous time, the \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the latent variables:
 \begin{align}
-      \mathbf{z}=\{\mathbf{z}_t\mid t\in[0,1]\}
+      \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-The forward process forms a conditional joint distribution $q(\mathbf{z}|\mathbf{x})$, whose marginal distributions of latent variables $\mathbf{z}_t$ given $\mathbf{x}\sim q(\mathbf{x})$ are given by:
+Song et al. \cite{Score_Based_Song} showed that we can use an It\^{o} stochastic differential equation (SDE) to define the time evolution of the diffusion process:
+\begin{align}
+      d\mathbf{z}=\mathbf{f}(\mathbf{z},t)dt + g(t)d\mathbf{w}\label{eq:forward_sde}
+\end{align}
+where $\mathbf{w}$ is the standard Wiener process, $\mathbf{f}(\mathbf{z}, t)$ is a vector-valued function called the \textit{drift} coefficient of $\mathbf{z}$, and $g(t)$ is a scalar function known as the \textit{diffusion} coefficient of $\mathbf{z}$. In this work, we use a \textit{variance-preserving} diffusion model, which is defined by:
+\begin{align}
+      \mathbf{f}(\mathbf{z},t)&=-\frac{1}{2}\left(\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\right)\mathbf{z}\\
+      g(t)^2&=\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)
+\end{align}
+where $\lambda_t\in[\lambda_{\min}, \lambda_{\max}]$ is a monotonically decreasing scalar-valued function of time $t\in[0,1]$. We provide more details on $\lambda_t$ in Section \ref{sec:background_diffusion_noise_schedule}. 
+
+The forward process forms a conditional joint distribution $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$, whose marginal distribution of each latent variable $\mathbf{z}_t$ given $\mathbf{x}\sim p^*(\mathbf{x})$ is given by:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t;\alpha_t\mathbf{x},\sigma_t^2\mathbf{I}\right)
       \label{eq:q_z_t_given_x}
 \end{align}
-where $\alpha_t$ and $\sigma_t$ are strictly positive scalar-valued functions of $t$. The joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
+where $\alpha_t$ and $\sigma_t$ are monotonic functions of $\lambda_t$, with the exact relationship also described in Section \ref{sec:background_diffusion_noise_schedule}. The true distribution $p^*(\mathbf{x})$ plus the conditional joint distribution of the forward model $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$ defines a joint distribution:
+\begin{align}
+      q(\mathbf{z}_0,\ldots,\mathbf{z}_1)=\int p^*(\mathbf{x}) q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x}) d\mathbf{x}
+\end{align}
+with marginals $q(\mathbf{z}_t)$. The joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{z}_s,\mathbf{z}_r)&=q(\mathbf{z}_t|\mathbf{z}_s)=\mathcal{N}\left(\mathbf{z}_t; \alpha_{t|s}\mathbf{z}_s, \sigma_{t|s}^2\mathbf{I}\right)
 \end{align}
@@ -506,23 +521,29 @@ where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha
 \subsection{Generative Model}
 \label{sec:background_diffusion_reverse}
 
-The generative model is a learned hierarchical model that matches the forward process running in reverse-time: in $T$ uniformly-spaced discrete timesteps, we sequentially generate latent variables, starting from $t=1$ and working backwards to $t=0$. More formally, our hierarchical generative model defines a joint distribution over latent variables:
+Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda$-dependent score network \cite{Generative_Modelling_By_Estimating_Gradients_Song} that approximates the score of $q(\mathbf{z}_t)$ such that:
 \begin{align}
-      p_\theta(\mathbf{z})=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
+      \mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)\label{eq:score_network}
 \end{align}
-where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. 
-
-For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
+Anderson \cite{Reverse_time_diffusion_Anderson} showed that if we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$ then the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by the reverse-time SDE:
+\begin{align}
+      d\mathbf{z}=\left[\mathbf{f}(\mathbf{z}, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\mathbf{w}
+\end{align}
+In the broader literature, diffusion models utilise a variety of numerical solvers to provide approximate trajectories of the reverse-time SDE. In this work, we sequentially generate latent variables starting from $t=1$ and working backwards to $t=0$, over $T$ uniformly-spaced discrete timesteps. More formally, this comprises a hierarchical generative model that defines a joint distribution over latent variables as follows:
+\begin{align}
+      p_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1)=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
+\end{align}
+where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
 \begin{align}
       D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))\approx 0
 \end{align}
-In this work, we use a variance-preserving diffusion model (i.e. $\alpha_t^2=1-\sigma_t^2$), and as such, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
+For variance-preserving diffusion models, as used in this work, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
 \begin{align}
       p_\theta(\mathbf{z}_1)=\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \mathbf{I})
 \end{align}
-Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. The discrete-time ancestral sampler samples $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
+Once we have sampled $\mathbf{z}_1\sim p_\theta(\mathbf{z}_1)$, we use the discrete-time ancestral sampler \cite{DDPM_Ho} to sequentially generate each latent variable $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$. This corresponds to a particular discretisation of the reverse-time variance-preserving SDE, as shown by Song et al. \cite{Score_Based_Song}. More formally, from a given latent $\mathbf{z}_t$ we generate $\mathbf{z}_s\sim p_\theta(\mathbf{z}_s|\mathbf{z}_t)$ via:
 \begin{align}
-      p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\\
+      p_\theta(\mathbf{z}_s|\mathbf{z}_t)&=q(\mathbf{z}_s|\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t))\label{eq:ancestral_sampler}\\
       &=\mathcal{N}\left(\tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x}=\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)), \tilde{\sigma}_{s|t}\mathbf{I}\right)
 \end{align}
 where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate of the original data $\mathbf{x}$ given latent $\mathbf{z}_t$ and log signal-to-noise ratio $\lambda_t$, and
@@ -530,6 +551,7 @@ where $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ is our denoised estimate
       \tilde{\boldsymbol\mu}_{s|t}(\mathbf{z}_t,\mathbf{x})&=\frac{\alpha_{t|s}\sigma_s^2}{\sigma_t^2}\mathbf{z}_t+\frac{\alpha_s\sigma_{t|s}^2}{\sigma_t^2}\mathbf{x}\\
       \tilde{\sigma}_{s|t}&=\frac{\sigma_{t|s}\sigma_s}{\sigma_t}
 \end{align}
+Interestingly, in Equation \ref{eq:ancestral_sampler} we introduced a denoiser network $\hat{\mathbf{x}}_\theta(\mathbf{z}_t, \lambda_t)$ to define the discrete-time ancestral sampler, while in Equation \ref{eq:score_network} we described diffusion models as learning a score network $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$. One of the powerful aspects of diffusion models is that we can freely switch between different parameterisations. For example, we can train a neural network $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ to predict the score of $\mathbf{z}_t$ and then convert the output to a denoised estimate of $\mathbf{z}_t$, as if we had trained a denoiser network $\mathbf{x}_\theta(\mathbf{z}_t, \lambda_t)$ directly. This reparameterisation property can be exceptionally advantageous. In this work, we  explicitly train neither a score nor a denoiser network but rather use the $\mathbf{v}$-prediction parameterisation \cite{Progressive_Distillation_Salimans}; we describe this in detail in Section \ref{sec:background_diffusion_parameterisations}.
 
 \subsection{Noise Schedule}
 \label{sec:background_diffusion_noise_schedule}
@@ -572,7 +594,6 @@ Figure \ref{fig:cosine_lambda_t} visualises how the log signal-to-noise ratio $\
       \caption{Relationship between time $t$ and the log signal-to-noise ratio $\lambda_t$ for the truncated continuous-time $\alpha$-cosine noise schedule $f_\lambda(t)$ as defined in Equation \ref{eq:f_lambda_alpha_cosine} with $\lambda_{\min}=-30$ and $\lambda_{\max}=30$. The horizontal axis is time $t\in[0,1]$; the vertical axis is $\lambda_t=f_\lambda(t)\in[\lambda_{\min},\lambda_{\max}]=[-30, 30]$.}
       \label{fig:cosine_lambda_t}
 \end{figure}
-
 We can compute $\alpha_t$ and $\sigma_t$ from either $\lambda_t$ or $t$ via the following equations:
 \begin{alignat}{2}
       \alpha_t&=\sqrt{S(\lambda_t)}&&=\cos\left(\frac{\pi}{2}(t_0+t(t_1-t_0)\right)\label{eq:alpha_t_alpha_cosine}\\
@@ -581,7 +602,8 @@ We can compute $\alpha_t$ and $\sigma_t$ from either $\lambda_t$ or $t$ via the 
 where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualises how the values of $\alpha_t$ and $\sigma_t$ vary with time $t\in[0,1]$ using the $\alpha$-cosine schedule detailed above. Appendix \ref{appx:diffusion_cosine_noise_schedule} provides further details on the form of $f_\lambda$ and how we can derive the forms for $\alpha_t$ and $\sigma_t$.
 
 \begin{figure}[htbp]
-      \begin{subfigure}{0.5\textwidth}
+      \centering
+      \begin{subfigure}{0.49\textwidth}
             \begin{tikzpicture}
             \begin{axis}[
                   xlabel=$t$,
@@ -598,7 +620,7 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
             \end{axis}
             \end{tikzpicture}
       \end{subfigure}
-      \begin{subfigure}{0.5\textwidth}
+      \begin{subfigure}{0.49\textwidth}
             \begin{tikzpicture}
             \begin{axis}[
                   xlabel=$t$,
@@ -617,6 +639,32 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
       \end{subfigure}
       \caption{Relationship between time $t$ and $\alpha_t$ (left) and $\sigma_t$ (right) for the same truncated continuous-time $\alpha$-cosine noise schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is time $t\in[0,1]$; the vertical axis is the value of $\alpha_t$ (left) and $\sigma_t$ (right).}
       \label{fig:cosine_alpha_sigma}
+\end{figure}
+
+We can, in theory, use two different noise schedules: one to train the model and another to generate new samples. During training, the noise schedule affects the variance of the gradients \cite{Understanding_Diffusion_Objective_Kingma}. During generation, we typically want to use a noise schedule that optimises the quality of the generated samples. However, in this work, we use the truncated continuous-time $\alpha$-cosine schedule for training and generation, as we found it to provide empirically good results for both. During training, we sampling $t\sim\mathcal{U}(0,1)$ uniformly at random, then compute $\lambda=f_\lambda(t)$, which equates to sampling $\lambda\sim p_\Lambda(\lambda)$, where $p_\Lambda(\lambda)$ is the probability density function for the truncated continuous-time $\alpha$-cosine schedule, and given by:
+\begin{align}
+      p_\Lambda(\lambda)=\frac{1}{2\pi(t_1-t_0)}\mathrm{sech}\left(\frac{\lambda}{2}\right)
+\end{align}
+Figure \ref{fig:p_lambda} displays the probability density function.
+\begin{figure}[htbp]
+      \centering
+      \begin{tikzpicture}
+      \begin{axis}[
+            xlabel=$\lambda$,
+            ylabel=$p_\Lambda(\lambda)$,
+            ylabel near ticks,
+            xlabel near ticks,
+            ylabel style={rotate=-90},
+            xmin=-30,
+            xmax=30,
+            ymin=0,
+            ymax=0.18,
+            width=.5\linewidth]
+      \addplot[color=red,thick,domain=-30:30,samples=300]{ (1 / cosh(x/2)) / (2 * pi * (2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))};
+      \end{axis}
+      \end{tikzpicture}
+      \caption{Probability density function $p_\Lambda(\lambda)$ for the same truncated continuous-time $\alpha$-cosine schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is the log signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$; the vertical axis is the corresponding probability density $p_\Lambda$.}
+      \label{fig:p_lambda}
 \end{figure}
 
 \subsection{Parameterisations}
@@ -644,7 +692,26 @@ Appendix \ref{appx:diffusion_v_prediction_parameterisation} provides further det
 
 \subsection{Score-Based Interpretation}
 
-During discrete-time ancestral sampling, 
+Suppose we have a multivariate Gaussian variable with mean $\boldsymbol\mu$ and covariance $\boldsymbol\Sigma$:
+\begin{align}
+      \mathbf{z}\sim p(\mathbf{z})=\mathcal{N}(\mathbf{z}; \boldsymbol\mu_{\mathbf{z}}, \boldsymbol\Sigma_{\mathbf{z}})
+\end{align}
+Tweedie's formula states that:
+\begin{align}
+\mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}}|\mathbf{z}\right]=\mathbf{z}+\boldsymbol\Sigma_{\mathbf{z}} \nabla_{\mathbf{z}}\log p(\mathbf{z})
+\end{align}
+As such, for a given latent:
+\begin{align}
+      \mathbf{z}_t\sim q()
+\end{align}
+$\mathbf{z}_t\sim\mathcal{N}(\mathbf{z}_t; \alpha_t\mathbf{x}, \sigma_t^2\mathbf{I})$, the expected value of the mean $\boldsymbol{\mu}_{\mathbf{z}_t}$ given $\mathbf{z}_t$ is given by:
+\begin{align}
+      \mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}_t}|\mathbf{z}_t\right]=\mathbf{z}_t+\sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
+\end{align}
+From Equation \ref{eq:q_z_t_given_x}, we have $\boldsymbol\mu_{\mathbf{z}_t}=\alpha_t\mathbf{x}$. Thus, we can reformulate the score of $q(\mathbf{z}_t)$ in terms of $\mathbf{z}_t$ and $\mathbf{x}$ as:
+\begin{align}
+      \alpha_t\mathbf{x}=\mathbf{z}_t + \sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
+\end{align}
 
 
 \subsection{ELBO for Diffusion Models}
@@ -653,9 +720,9 @@ During discrete-time ancestral sampling,
 We can interpret diffusion models as a special case of Markovian hierarchical VAEs, with several notable restrictions. Namely, the dimensionality of each latent $\mathbf{z}_t$ must be equal to the dimensionality of the observed variable $\mathbf{x}$; we pre-define $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters; and, the distribution of the final latent $\mathbf{z}_t$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds no information about the observed variable $\mathbf{x}$. Much like the VAE, the original diffusion model introduced by Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} was trained by optimising the ELBO---equivalently minimising the negative ELBO---which we can derive into three constituent terms: a reconstruction loss, a prior loss and a diffusion loss:
 \begin{align}
       -\log p_\theta(\mathbf{x})&\le -\mathrm{ELBO}(\mathbf{x})\\
-      &=\mathbb{E}_{\mathbf{z}\sim q(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}))\\
-      &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))}_{\text{Prior Loss}}+\underbrace{\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t, \lambda_t) \Vert_2^2\right]}_{\text{Diffusion Loss}}\label{eq:diffusion_elbo}
+      &=\mathbb{E}_{\mathbf{z}_0,...\mathbf{z}_1\sim q(\mathbf{z}_0,...,\mathbf{z}_1|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
+      &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))}_{\text{Prior Loss}}+\underbrace{\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t, \lambda_t) \Vert_2^2\right]d\lambda}_{\text{Diffusion Loss}}\label{eq:diffusion_elbo}
 \end{align}
 With sufficiently large $\lambda_{\max}$, the reconstruction loss is approximately zero since we can almost perfectly reconstruct $\mathbf{x}$ from $\mathbf{z}_0$---this is particularly true for discrete $\mathbf{x}$. Mathematically, as $\lambda_{\max}\to\infty$, we have:
 \begin{align}
@@ -709,39 +776,39 @@ An important observation made by Kingma and Gao \cite{Understanding_Diffusion_Ob
 \begin{align}
       w(\lambda) = 1
 \end{align}
-
-\subsection{Loss for the $\mathbf{v}$-Prediction Parameterisation as the Weighted Loss}
-\label{sec:background_diffusion_v_weighted_loss}
-
-Figure \ref{fig:p_lambda} displays the probability density function for the truncated continuous-time $\alpha$-cosine schedule described in Section \ref{sec:background_diffusion_noise_schedule}; in equation form, $p_\Lambda(\lambda)$ is given by:
+The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_parameterisation_loss} equates to the weighted loss $\mathcal{L}_w$ with:
 \begin{align}
-      p_\Lambda(\lambda)=\frac{1}{2\pi(t_1-t_0)}\mathrm{sech}\left(\frac{\lambda}{2}\right)
+      w(\lambda)&=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)\\
+      -w'(\lambda)&=\frac{1}{4\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
 \end{align}
+Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)$ and the negative of its derivative $-w'(\lambda)$ for the $\mathbf{v}$-parameterisation loss. As evident from the graphs, the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda$, and as such $-w'(\lambda)$ is positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$.
 \begin{figure}[htbp]
       \centering
       \begin{tikzpicture}
-      \begin{axis}[
-            xlabel=$\lambda$,
-            ylabel=$p_\Lambda(\lambda)$,
-            ylabel near ticks,
-            xlabel near ticks,
-            ylabel style={rotate=-90},
-            xmin=-30,
-            xmax=30,
-            ymin=0,
-            ymax=0.18,
-            width=.5\linewidth]
-      \addplot[color=red,thick,domain=-30:30,samples=300]{ (1 / cosh(x/2)) / (2 * pi * (2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))};
-      \end{axis}
+            \begin{axis}[
+                  xlabel=$\lambda$,
+                  ymode = log,
+                  xmin=-30,
+                  xmax=30,
+                  ymin=0.00000001,
+                  ymax=1000000,
+                  width=.5\linewidth,
+                  legend pos=north east,
+                  legend style={font=\small},
+                  legend cell align={left},
+                  ylabel style={rotate=-90},
+                  ylabel near ticks,
+                  xlabel near ticks
+                  ]
+                  \addplot[color=red,thick,domain=-30:30,samples=100]{1 / ((2 * pi * (2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))) * exp(-x / 2)};
+                  \addlegendentry{$w(\lambda)$}
+                  \addplot[color=blue,thick,domain=-30:30,samples=100]{1 / ((4 * pi * (2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))) * exp(-x / 2)};
+                  \addlegendentry{$-w'(\lambda)$}
+                  \end{axis}
       \end{tikzpicture}
-      \caption{Probability density function $p_\Lambda(\lambda)$ for the same truncated continuous-time $\alpha$-cosine schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is the log signal-to-noise ratio $\lambda\in[\lambda_{\min}, \lambda_{\max}]$; the vertical axis is the corresponding probability density $p_\Lambda$.}
-      \label{fig:p_lambda}
+      \caption{Relationship between the log signal-to-noise ratio $\lambda$ and the functions $w(\lambda)$ and $-w'(\lambda)$ for the $\mathbf{v}$-parameterisation with the same truncated continuous-time $\alpha$-cosine schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is the log signal-to-noise level $\lambda$; the vertical axis is the value of $w(\lambda)$ and $-w'(\lambda)$; the vertical axis is logarithmic.}
+      \label{fig:v_prediction_weighting}
 \end{figure}
-
-The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_parameterisation_loss} equates to the weighted loss $\mathcal{L}_w$ with:
-\begin{align}
-      w(\lambda)=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
-\end{align}
 
 \subsection{Replacement Sampling}
 \label{sec:background_diffusion_replacement_sampling}

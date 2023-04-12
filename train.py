@@ -30,5 +30,5 @@ trainer = Trainer(
     results_folder='/user/work/cj19328/results_transform_0.1_lambda_30'
 )
 
-# trainer.load()
+trainer.load(144)
 trainer.train()
