@@ -283,11 +283,15 @@ In this work, we do not explicitly use a conditional model. However, we do deriv
 \section{Latent Variables}
 \label{sec:background_latent}
 
-We can think of each observed datapoint $\mathbf{x}\in\mathcal{D}$ as being represented or generated via one or more associated \textit{latent variables}, typically denoted $\mathbf{z}$. The latent variables are part of the model, but we do not observe them directly, and they are not within the dataset. We model the joint distribution of the observed variable $\mathbf{x}$ and the latent variables $\mathbf{z}$ by $p_\theta(\mathbf{x},\mathbf{z})$; the marginal distribution over the observed variable $p_\theta(\mathbf{x})$ is given by:
+We can think of each observed datapoint $\mathbf{x}\in\mathcal{D}$ as being represented or generated via $N_{\mathbf{z}}\ge 1$ associated \textit{latent variables}:
 \begin{align}
-      p_\theta(\mathbf{x})=\int p_\theta(\mathbf{x},\mathbf{z}) d\mathbf{z}
+      \{\mathbf{z}_1,\ldots,\mathbf{z}_{N_\mathbf{z}}\} = \{\mathbf{z}_i \mid i \le 1 \le N_{\mathbf{z}}, i \in \mathbb{N} \}
 \end{align}
-In the context of a latent-variable model, \textit{generation} refers to the process of sampling the latent variables $\mathbf{z}$ from some prior $p_\theta(\mathbf{z})$, and then sampling the observed variable $\mathbf{x}$ from the likelihood $p_\theta(\mathbf{x}|\mathbf{z})$.
+The latent variables are part of the model, but we do not observe them directly, and they are not within the dataset. We model the joint distribution of the observed variable and the latent variables by $p_\theta(\mathbf{x},\mathbf{z}_1,\ldots,\mathbf{z}_{N_\mathbf{z}})$; the marginal distribution over the observed variable $p_\theta(\mathbf{x})$ is given by:
+\begin{align}
+      p_\theta(\mathbf{x})=\int p_\theta(\mathbf{x},\mathbf{z}_1,\ldots,\mathbf{z}_{N_\mathbf{z}}) d\mathbf{z}
+\end{align}
+In the context of a latent-variable model, \textit{generation} refers to the process of sampling the latent variables from the joint distribution $p_\theta(\mathbf{z}_1,\ldots,\mathbf{z}_{N_\mathbf{z}})$, and then sampling the observed variable from the conditional distribution $p_\theta(\mathbf{x}|\mathbf{z}_1,\ldots,\mathbf{z}_{N_\mathbf{z}})$. In the simplest case, we may only have a single latent variable; we omit the index $1$ in such cases for notational simplicity.
 
 \section{Likelihood-Based Generative Models}
 \label{sec:background_unbiased_objective}
@@ -405,14 +409,14 @@ and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\math
 \end{align}
 As such, maximisation of the ELBO accomplishes two things. Firstly, it will approximately maximise the log-likelihood of the observed variable $\mathbf{x}$---the overriding goal of a likelihood-based generative model. Secondly, it will minimise the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ from $p_\theta(\mathbf{z}|\mathbf{x})$, thus encouraging the approximate posterior $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ as closely as possible. 
 
-\subsection{Hierarchical Variational Autoencoders}
+\subsection{Markovian Hierarchical Variational Autoencoders}
 \label{sec:background_vae_hierarchical}
 
-
-
-\subsection{Markovian Hierarchical Variational Autoencoders}
-\label{sec:background_vae_markovian_hierarchical}
-
+The Markovian hierarchical variational autoencoder (MHVAE) \cite{Improved_Variational_Inference_Kingma,Ladder_VAEs_Sonderby} is a versatile extension of the VAE, accommodating an unrestricted number $N_\mathbf{z}\ge 1$ of latent variables. Notably, the joint distribution of the observed variable and the latent variables is Markovian:
+\begin{align}
+      p_\theta(\mathbf{x}, \mathbf{z}_1,\ldots,\mathbf{z}_{N_{\mathbf{z}}})=p(\mathbf{x}|\mathbf{z}_1)p_\theta(\mathbf{z}_{N_\mathbf{z}})\prod_{i=1}^{N_{\mathbf{z}}-1}p_\theta(\mathbf{z}_i|\mathbf{z}_{i+1})
+\end{align}
+Figure \ref{fig:mhvae} illustrates the MHVAE model. For the generative model, the observed variable $\mathbf{x}$ is conditionally independent of $\mathbf{z}_2$ and $\mathbf{z}_3$ given $\mathbf{z}_1$. Similarly, $\mathbf{z}_1$ is conditionally independent of $\mathbf{z}_3$ given $\mathbf{z}_2$.
 \begin{figure}[htbp]
       \centering
       \begin{tikzpicture}[->, >=stealth', auto, node distance=3cm, main node/.style={circle, draw, minimum size=1.25cm}]
@@ -433,8 +437,31 @@ As such, maximisation of the ELBO accomplishes two things. Firstly, it will appr
             (z3) edge [bend left] node[below] {$p_\theta(\mathbf{z}_2|\mathbf{z}_3)$} (z2);
       \end{tikzpicture}
       \caption{Graphical depiction of Markovian hierarchical VAE with one observed variable $\mathbf{x}$ and three latent variables $\mathbf{z}_1$, $\mathbf{z}_2$ and $\mathbf{z}_3$. Solid lines depict the Bayesian network of the generative model; dashed lines depict the Bayesian network of the approximate inference model.}
-      \label{fig:hvae}
+      \label{fig:mhvae}
 \end{figure}
+
+As an extreme, in the limit of $N_\mathbf{z}\to\infty$, we instead write our latent variables in terms of a continuous-time variable $t\in[0,1]$ as:
+\begin{align}
+      \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
+\end{align}
+We can formulate the ELBO for the continuous-time MHVAE as follows:
+\begin{align}
+      p_\theta(\mathbf{x})&\ge \mathrm{ELBO}(\mathbf{x})\\
+      &=\mathbb{E}_{\mathbf{z}_0,...,\mathbf{z}_1\sim q_\phi(\mathbf{z}_0,...,\mathbf{z}_1|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right) \right]\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
+\end{align}
+Per datapoint $\mathbf{x}$, we define $\mathcal{L}_T(t)$ as the KL divergence of $q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t$ to 1, and its corresponding time derivative $\mathcal{L}_T'(t)$ as:
+\begin{align}
+      \mathcal{L}_T(t)&=D_{KL}(q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))\label{eq:dkl_t}\\
+      \mathcal{L}_T'(t)&=\frac{d}{dt}\mathcal{L}_T(t)
+\end{align}
+We can substitute this into the ELBO and use the second fundamental theorem of calculus to yield the following form for the ELBO, defined per datapoint $\mathbf{x}$ as:
+\begin{align}
+      \mathrm{ELBO}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(0)\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(1)+\int_0^1\mathcal{L}'_T(t)\mathrm{d}t \label{eq:elbo_mhvae}
+\end{align}
+This form for the ELBO may seem unconventional. However, we introduce it here to motivate a strong theoretical link between the ELBO and the weighted loss \cite{Understanding_Diffusion_Objective_Kingma}, which is used to train diffusion models in the broader literature. We explore the weighted loss in Section \ref{sec:background_diffusion_weighted_loss}.
 
 \section{Score-Based Generative Models}
 \label{sec:background_score}
@@ -527,9 +554,9 @@ Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda$-dependent score 
 \end{align}
 Anderson \cite{Reverse_time_diffusion_Anderson} showed that if we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$ then the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by the reverse-time SDE:
 \begin{align}
-      d\mathbf{z}=\left[\mathbf{f}(\mathbf{z}, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\mathbf{w}
+      d\mathbf{z}=\left[\mathbf{f}(\mathbf{z}, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\bar{\mathbf{w}}
 \end{align}
-In the broader literature, diffusion models utilise a variety of numerical solvers to provide approximate trajectories of the reverse-time SDE. In this work, we sequentially generate latent variables starting from $t=1$ and working backwards to $t=0$, over $T$ uniformly-spaced discrete timesteps. More formally, this comprises a hierarchical generative model that defines a joint distribution over latent variables as follows:
+where $\bar{\mathbf{w}}$ is a standard Wiener process when time flows backwards. In the broader literature, diffusion models utilise a variety of numerical solvers to provide approximate trajectories of the reverse-time SDE. In this work, we sequentially generate latent variables starting from $t=1$ and working backwards to $t=0$, over $T$ uniformly-spaced discrete timesteps. More formally, this comprises a hierarchical generative model that defines a joint distribution over latent variables as follows:
 \begin{align}
       p_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1)=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
 \end{align}
@@ -560,14 +587,14 @@ We formalise the notion that $\mathbf{z}_t$ is increasingly noisy by defining th
 \begin{align}
       \lambda_t = \log\left( \frac{\alpha_t^2}{\sigma_t^2}\right)\in[\lambda_{\min}, \lambda_{\max}]
 \end{align}
-as a strictly monotonically decreasing function $f_{\lambda}$ of time $t\in[0, 1]$, known as the \textit{noise schedule}.
+as a strictly monotonically decreasing function $f_{\Lambda}$ of time $t\in[0, 1]$, known as the \textit{noise schedule}.
 
 In this work, we use a truncated continuous-time version of the $\alpha$-cosine schedule \cite{IDDPM_Nichol}, introduced in its original discrete-time form by Nichol and Dhariwal \cite{IDDPM_Nichol}. The $\alpha$-cosine schedule was motivated by the fact that the `linear' schedule introduced in prior work by Ho et al. \cite{DDPM_Ho} causes $\alpha_t$ to fall to zero more quickly than is optimal. Nichol and Dhariwal empirically found that this induces too much noise in the latter stages of the forward diffusion process; as such, the latent variables $\mathbf{z}_t$ in these stages contribute little to sample quality. In response, they proposed the original discrete-time $\alpha$-cosine schedule. In this work, we use a continuous-time diffusion model and therefore use an adapted model described in \cite{Simple_Diffusion_Hoogeboom}. More formally, we define:
 \begin{align}
-      f_{\lambda}(t)=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
+      \lambda_t=f_{\Lambda}(t)=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
       \label{eq:f_lambda_alpha_cosine}
 \end{align} 
-where $t_0$ and $t_1$ truncate $f_{\lambda}(t)$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$ for $t\in[0,1]$, and are themselves defined as:
+where $t_0$ and $t_1$ truncate $f_{\Lambda}(t)$ to the desired range $[\lambda_{\min}, \lambda_{\max}]$ for $t\in[0,1]$, and are themselves defined as:
 \begin{align}
       t_0&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\max}\right)\right)\\
       t_1&=\frac{2}{\pi}\arctan\left(\exp\left(-\frac{1}{2}\lambda_{\min}\right)\right)
@@ -591,7 +618,7 @@ Figure \ref{fig:cosine_lambda_t} visualises how the log signal-to-noise ratio $\
       \addplot[color=red,thick,domain=-0.005:1.005,samples=200]{-2 * ln(tan(deg(pi / 2 * ((2 / pi * rad(atan(exp(-0.5 * 30)))) + x * ((2 / pi * rad(atan(exp(-0.5 * -30)))) - (2 / pi * rad(atan(exp(-0.5 * 30)))))))))};
       \end{axis}
       \end{tikzpicture}
-      \caption{Relationship between time $t$ and the log signal-to-noise ratio $\lambda_t$ for the truncated continuous-time $\alpha$-cosine noise schedule $f_\lambda(t)$ as defined in Equation \ref{eq:f_lambda_alpha_cosine} with $\lambda_{\min}=-30$ and $\lambda_{\max}=30$. The horizontal axis is time $t\in[0,1]$; the vertical axis is $\lambda_t=f_\lambda(t)\in[\lambda_{\min},\lambda_{\max}]=[-30, 30]$.}
+      \caption{Relationship between time $t$ and the log signal-to-noise ratio $\lambda_t$ for the truncated continuous-time $\alpha$-cosine noise schedule $f_\Lambda(t)$ as defined in Equation \ref{eq:f_lambda_alpha_cosine} with $\lambda_{\min}=-30$ and $\lambda_{\max}=30$. The horizontal axis is time $t\in[0,1]$; the vertical axis is $\lambda_t=f_\Lambda(t)\in[\lambda_{\min},\lambda_{\max}]=[-30, 30]$.}
       \label{fig:cosine_lambda_t}
 \end{figure}
 We can compute $\alpha_t$ and $\sigma_t$ from either $\lambda_t$ or $t$ via the following equations:
@@ -599,7 +626,7 @@ We can compute $\alpha_t$ and $\sigma_t$ from either $\lambda_t$ or $t$ via the 
       \alpha_t&=\sqrt{S(\lambda_t)}&&=\cos\left(\frac{\pi}{2}(t_0+t(t_1-t_0)\right)\label{eq:alpha_t_alpha_cosine}\\
       \sigma_t&=\sqrt{S(-\lambda_t)}&&=\sin\left(\frac{\pi}{2}(t_0+t(t_1-t_0)\right)\label{eq:sigma_t_alpha_cosine}
 \end{alignat}
-where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualises how the values of $\alpha_t$ and $\sigma_t$ vary with time $t\in[0,1]$ using the $\alpha$-cosine schedule detailed above. Appendix \ref{appx:diffusion_cosine_noise_schedule} provides further details on the form of $f_\lambda$ and how we can derive the forms for $\alpha_t$ and $\sigma_t$.
+where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualises how the values of $\alpha_t$ and $\sigma_t$ vary with time $t\in[0,1]$ using the $\alpha$-cosine schedule detailed above. Appendix \ref{appx:diffusion_cosine_noise_schedule} provides further details on the form of $f_\Lambda$ and how we can derive the forms for $\alpha_t$ and $\sigma_t$.
 
 \begin{figure}[htbp]
       \centering
@@ -641,7 +668,7 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
       \label{fig:cosine_alpha_sigma}
 \end{figure}
 
-We can, in theory, use two different noise schedules: one to train the model and another to generate new samples. During training, the noise schedule affects the variance of the gradients \cite{Understanding_Diffusion_Objective_Kingma}. During generation, we typically want to use a noise schedule that optimises the quality of the generated samples. However, in this work, we use the truncated continuous-time $\alpha$-cosine schedule for training and generation, as we found it to provide empirically good results for both. During training, we sampling $t\sim\mathcal{U}(0,1)$ uniformly at random, then compute $\lambda=f_\lambda(t)$, which equates to sampling $\lambda\sim p_\Lambda(\lambda)$, where $p_\Lambda(\lambda)$ is the probability density function for the truncated continuous-time $\alpha$-cosine schedule, and given by:
+We can, in theory, use two different noise schedules: one to train the model and another to generate new samples. During training, the noise schedule affects the variance of the gradients \cite{Understanding_Diffusion_Objective_Kingma}. During generation, we typically want to use a noise schedule that optimises the quality of the generated samples. However, in this work, we use the truncated continuous-time $\alpha$-cosine schedule for training and generation, as we found it to provide empirically good results for both. During training, we sampling $t\sim\mathcal{U}(0,1)$ uniformly at random, then compute $\lambda=f_\Lambda(t)$, which equates to sampling $\lambda\sim p_\Lambda(\lambda)$, where $p_\Lambda(\lambda)$ is the probability density function for the truncated continuous-time $\alpha$-cosine schedule, and given by:
 \begin{align}
       p_\Lambda(\lambda)=\frac{1}{2\pi(t_1-t_0)}\mathrm{sech}\left(\frac{\lambda}{2}\right)
 \end{align}
@@ -717,71 +744,70 @@ From Equation \ref{eq:q_z_t_given_x}, we have $\boldsymbol\mu_{\mathbf{z}_t}=\al
 \subsection{ELBO for Diffusion Models}
 \label{sec:background_diffusion_elbo}
 
-We can interpret diffusion models as a special case of Markovian hierarchical VAEs, with several notable restrictions. Namely, the dimensionality of each latent $\mathbf{z}_t$ must be equal to the dimensionality of the observed variable $\mathbf{x}$; we pre-define $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters; and, the distribution of the final latent $\mathbf{z}_t$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds no information about the observed variable $\mathbf{x}$. Much like the VAE, the original diffusion model introduced by Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} was trained by optimising the ELBO---equivalently minimising the negative ELBO---which we can derive into three constituent terms: a reconstruction loss, a prior loss and a diffusion loss:
+We can interpret the variance-preserving diffusion model used in this work as an MHVAE with several additional restrictions. Firstly, the dimensionality of each latent $\mathbf{z}_t$ equals the dimensionality of the observed variable. Secondly, we have pre-defined $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters. Finally, the marginal distribution of the final latent $q(\mathbf{z}_1)$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds effectively no information about the observed variable $\mathbf{x}$. VAEs and MHVAEs do not typically have these restrictions. Nonetheless, much like VAEs and MHVAEs, we can optimise the generative parameters $\theta$ of diffusion models by maximising the ELBO. As a notable example, Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} optimised the original discrete-time diffusion model via the ELBO. 
+
+For a given datapoint $\mathbf{x}$, we define $\mathcal{L}_\Lambda(\lambda)$ as the KL divergence of $q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t=f_\Lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$:
 \begin{align}
-      -\log p_\theta(\mathbf{x})&\le -\mathrm{ELBO}(\mathbf{x})\\
-      &=\mathbb{E}_{\mathbf{z}_0,...\mathbf{z}_1\sim q(\mathbf{z}_0,...,\mathbf{z}_1|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
-      &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0|\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))}_{\text{Prior Loss}}+\underbrace{\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}(\mathbf{z}_t, \lambda_t) \Vert_2^2\right]d\lambda}_{\text{Diffusion Loss}}\label{eq:diffusion_elbo}
+      \mathcal{L}_\Lambda(\lambda)=D_{KL}(q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))
+\end{align}
+Notably, $\mathcal{L}_\Lambda(\lambda)$ equates to $\mathcal{L}_T(t)$ defined in Equation \ref{eq:dkl_t} under a simple change of variable:
+\begin{align}
+      \mathcal{L}_\Lambda(\lambda)=\mathcal{L}_T(t=f_\Lambda^{-1}(\lambda))
+\end{align}
+Similarly, we can reformulate the ELBO for a continuous-time MHVAE given in Equation \ref{eq:elbo_mhvae} to provide the ELBO loss in terms of the log signal-to-noise ratio $\lambda$; it is given per datapoint $\mathbf{x}$ by:
+\begin{align}
+      -\mathrm{ELBO}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_\Lambda(\lambda_{\max})\\
+      &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{\mathcal{L}_\Lambda(\lambda_{\min})}_{\text{Prior Loss}}+\int_{\lambda_{\min}}^{\lambda_{\max}}\mathcal{L}_\Lambda'(\lambda)d\lambda\label{eq:diffusion_elbo}
 \end{align}
 With sufficiently large $\lambda_{\max}$, the reconstruction loss is approximately zero since we can almost perfectly reconstruct $\mathbf{x}$ from $\mathbf{z}_0$---this is particularly true for discrete $\mathbf{x}$. Mathematically, as $\lambda_{\max}\to\infty$, we have:
 \begin{align}
       \lim_{\lambda_{\max}\to\infty}q(\mathbf{z}_0|\mathbf{x})=\delta(\mathbf{z}_0-\mathbf{x})
 \end{align}
-where $\delta$ is the Dirac delta distribution, in which case $\mathbf{z}_0=\mathbf{x}$. Similarly, with sufficiently small $\lambda_{\min}$, the prior loss is approximately zero; as $\lambda_{\min}\to-\infty$, we have:
+where $\delta$ is the Dirac delta distribution. Similarly, with sufficiently small $\lambda_{\min}$, the prior loss is approximately zero; as $\lambda_{\min}\to-\infty$, we have:
 \begin{align}
       \lim_{\lambda_{\min}\to -\infty} q(\mathbf{z}_1|\mathbf{x})&=\mathcal{N}(\mathbf{0}, \mathbf{I})=p_\theta(\mathbf{z}_1)
 \end{align}
 so the KL divergence prior loss term likewise approaches zero.
 
+In Appendix C of \cite{Understanding_Diffusion_Objective_Kingma}, Kingma and Gao showed that $\mathcal{L}_\Lambda'(\lambda)$---which, with slight abuse of terminology, they refer to as the \textit{time derivative}---simplifies to a remarkable degree:
+\begin{align}
+      \mathcal{L}_{\Lambda}'(\lambda)=\frac{d}{d\lambda}\mathcal{L}_\Lambda(\lambda)=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon -\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]\label{eq:time_derivative}
+\end{align} 
+
 \subsection{Weighted Loss}
 \label{sec:background_diffusion_weighted_loss}
 
-Most diffusion models in the broader literature---including state-of-the-art models---are not optimised using the ELBO. Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} showed that the various objectives used are all special cases of a \textit{weighted loss}, which is defined per datapoint $\mathbf{x}$ as:
+Most diffusion models in the broader literature---including state-of-the-art models---do not optimise their parameters $\theta$ via minimisation of the ELBO loss. In practice, the various objectives used are all special cases of a \textit{weighted loss} \cite{Understanding_Diffusion_Objective_Kingma}, which is defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}'(\lambda)d\lambda
+      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}_\Lambda'(\lambda)d\lambda
 \end{align}
-where $w(\lambda)$ is a weighting function and $\mathcal{L}(\lambda)$ is the KL divergence of $q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t=f_\lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$:
+where $w(\lambda)$ is a weighting function. Substituting the form of $\mathcal{L}'_\Lambda(\lambda)$ given in Equation \ref{eq:time_derivative} yields the following form for the weighted loss:
 \begin{align}
-      \mathcal{L}(\lambda)=D_{KL}(q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))
+      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]d\lambda
 \end{align}
-To maintain consistency with Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma}, we refer to $\mathcal{L}'(\lambda)$ as the \textit{time derivative}, despite actually being the derivative of $\mathcal{L}(\lambda)$ with respect to the log signal-to-noise ratio; it is given by:
-\begin{align}
-      \mathcal{L}'(\lambda)=\frac{d}{d\lambda}\mathcal{L}(\lambda)=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]
-\end{align}
-Substituting the form of $\mathcal{L}(\lambda)$ and $\mathcal{L}'(\lambda)$ and into $\mathcal{L}_w$ gives us:
-\begin{align}
-      \mathcal{L}_w&=w(\lambda_{\min})D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]d\lambda
-\end{align}
-This form provides several useful insights. We can see that the first term, the weighted prior loss, contains no learnable parameters. Thus, minimisation of the weighted loss $\mathcal{L}_w$ equates to minimisation of the intractable integral. In practice, we minimise the integral via an importance-weighted Monte Carlo integrator:
+This form provides several useful insights. Since the first term---the weighted prior loss---contains no learnable parameters, minimisation of the weighted loss $\mathcal{L}_w$ equates to minimisation of the intractable integral. In practice, we minimise the integral via an importance-weighted Monte Carlo integrator:
 \begin{align}
       \int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]d\lambda&=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda)}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon - \hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda)\Vert_2^2 \right]\right]\\
       &=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]\\
       &\simeq \frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2
 \end{align}
-where $p_\Lambda(\lambda)$ is determined by the training noise schedule---we can sample from $p_\Lambda(\lambda)$ by first sampling $t\sim\mathcal{U}(0, 1)$, then computing $\lambda=f_\lambda(t)$. 
-
-Notably, further analysis by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} shows that the weighted loss also has a likelihood-based interpretation. The fundamental theorem of calculus enables us to write the weighted loss as:
+Notable further analysis by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} shows that the weighted loss also has a likelihood-based interpretation. Simple integration by parts enables us to write the weighted loss as:
 \begin{align}
-      \mathcal{L}_w = w(\lambda_{\max})\mathcal{L}(\lambda_{\max}) + \int_{\lambda_{\min}}^{\lambda_{\max}}-w'(\lambda)\mathcal{L}(\lambda) d\lambda
+      \mathcal{L}_w = w(\lambda_{\max})\mathcal{L}_\Lambda(\lambda_{\max}) + \int_{\lambda_{\min}}^{\lambda_{\max}}-w'(\lambda)\mathcal{L}_\Lambda(\lambda) d\lambda
 \end{align}
-The likelihood-based interpretation comes from the fact that $\mathcal{L}(\lambda)$ serves as a variational bound on the negative marginal likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$, plus a constant; this is given by:
+The likelihood-based interpretation comes from the fact that $\mathcal{L}_\Lambda(\lambda)$ serves as a variational bound on the negative marginal likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$:
 \begin{align}
-      \mathcal{L}(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
+      \mathcal{L}_\Lambda(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
       &=\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[-\log p(\mathbf{z}_t)\right]+\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[\log q(\mathbf{z}_t|\mathbf{x})\right]
 \end{align}
-As such, minimisation of $\mathcal{L}(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. For this reason, we use a monotonically decreasing weighting function in this work. In contrast, most diffusion models in the broader literature (see e.g. \cite{DDPM_Ho,IDDPM_Nichol,Imagen_Saharia}) undergo training with non-monotonic weighting functions. In such cases, for noise levels whereby $-w'(\lambda)$ is negative, the weighted loss has a counterintuitive interpretation of minimisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$.
+As such, minimisation of $\mathcal{L}_\Lambda(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. 
 
-An important observation made by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} is that the ELBO in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with:
-\begin{align}
-      w(\lambda) = 1
-\end{align}
-The $\mathbf{v}$-prediction parameterisation loss given in Equation \ref{eq:v_parameterisation_loss} equates to the weighted loss $\mathcal{L}_w$ with:
+Kingma and Gao's \cite{Understanding_Diffusion_Objective_Kingma} analysis directly justifies our use of the $\mathbf{v}$-prediction parameterisation with the truncated continuous-time $\alpha$-cosine noise schedule. In conjunction, their use equates to the weighted loss with:
 \begin{align}
       w(\lambda)&=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)\\
       -w'(\lambda)&=\frac{1}{4\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
 \end{align}
-Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)$ and the negative of its derivative $-w'(\lambda)$ for the $\mathbf{v}$-parameterisation loss. As evident from the graphs, the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda$, and as such $-w'(\lambda)$ is positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$.
+Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)$ and the negative of its derivative $-w'(\lambda)$ for the $\mathbf{v}$-parameterisation loss. As evident from the graphs, the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda$, and as such $-w'(\lambda)$ is positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. Therefore, during training, we are maximising a weighted expected log-likelihood of noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ for all $\lambda\in[\lambda_{\min}, \lambda_{\max}]$. In contrast, most diffusion models in the broader literature (see e.g. \cite{DDPM_Ho,IDDPM_Nichol,Imagen_Saharia}) undergo training with non-monotonic weighting functions. In such cases, for noise levels whereby $-w'(\lambda)$ is negative, the weighted loss has a counterintuitive interpretation of minimisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$.
 \begin{figure}[htbp]
       \centering
       \begin{tikzpicture}
@@ -810,14 +836,19 @@ Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)
       \label{fig:v_prediction_weighting}
 \end{figure}
 
-\subsection{Replacement Sampling}
-\label{sec:background_diffusion_replacement_sampling}
+Assuming the reconstruction loss is approximately zero, the ELBO loss given in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with $w(\lambda) = 1$.
 
-\subsection{Reconstruction-Guided Sampling}
+\subsection{Reconstruction-Guided Sampling for Conditional Generation}
 \label{sec:background_diffusion_reconstruction_guided_sampling}
+
+In Section \ref{sec:background_conditional}, we introduced the concept of conditional generation. In this work, however, we do not train a conditional model explicitly. Instead, we utilise \textit{reconstruction-guided sampling} \cite{VDM_Ho}: a sophisticated technique that derives a conditional model approximately from an unconditional model. Reconstruction-guided sampling is advantageous, as it enables us to train only a single unconditional model, which we can then use to facilitate a wide range of conditional generation tasks.
+
+We denote the known and unknown elements of a tensor $\mathbf{x}$ by $\mathbf{x}^a$ and $\mathbf{x}^b$, respectively. 
 
 \subsection{U-Net}
 \label{sec:background_unet}
+
+
 
 \chapter{Climate Background}
 \label{chap:background_climate}
@@ -927,7 +958,7 @@ From this, we define $t_0$ and $t_1$ as:
 \end{align}
 The truncated noise schedule used in this work is then defined as:
 \begin{align}
-      f_\lambda(t)&=\tilde{f}_\lambda(t_0+t(t_1-t_0))\\
+      f_\Lambda(t)&=\tilde{f}_\lambda(t_0+t(t_1-t_0))\\
       &=-2\log\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)
 \end{align}
 
