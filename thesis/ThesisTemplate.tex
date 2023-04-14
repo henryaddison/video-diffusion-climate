@@ -519,14 +519,14 @@ Specified in continuous time, the \textit{forward diffusion process} is a Gaussi
 \begin{align}
       \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-Song et al. \cite{Score_Based_Song} showed that we can use an It\^{o} stochastic differential equation (SDE) to define the time evolution of the diffusion process:
+Song et al. \cite{Score_Based_Song} showed that an It\^{o} stochastic differential equation (SDE) defines the time evolution of the diffusion process:
 \begin{align}
-      d\mathbf{z}=\mathbf{f}(\mathbf{z},t)dt + g(t)d\mathbf{w}\label{eq:forward_sde}
+      d\mathbf{z}_t=\mathbf{f}(\mathbf{z}_t,t)dt + g(t)d\mathbf{w}_t\label{eq:forward_sde}
 \end{align}
-where $\mathbf{w}$ is the standard Wiener process, $\mathbf{f}(\mathbf{z}, t)$ is a vector-valued function called the \textit{drift} coefficient of $\mathbf{z}$, and $g(t)$ is a scalar function known as the \textit{diffusion} coefficient of $\mathbf{z}$. In this work, we use a \textit{variance-preserving} diffusion model, which is defined by:
+where $\mathbf{w}_t$ is the standard Wiener process, $\mathbf{f}(\mathbf{z}_t, t)$ is a vector-valued function called the \textit{drift} coefficient of $\mathbf{z}$, and $g(t)$ is a scalar-function known as the \textit{diffusion} coefficient of $\mathbf{z}_t$. In this work, we use a \textit{variance-preserving} diffusion model, which is defined by:
 \begin{align}
-      \mathbf{f}(\mathbf{z},t)&=-\frac{1}{2}\left(\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\right)\mathbf{z}\\
-      g(t)^2&=\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)
+      \mathbf{f}(\mathbf{z}_t,t)&=-\frac{1}{2}\left(\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\right)\mathbf{z}_t\\
+      g(t)^2&=\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\label{eq:diffusion_coefficient_scalar}
 \end{align}
 where $\lambda_t\in[\lambda_{\min}, \lambda_{\max}]$ is a monotonically decreasing scalar-valued function of time $t\in[0,1]$. We provide more details on $\lambda_t$ in Section \ref{sec:background_diffusion_noise_schedule}. 
 
@@ -548,15 +548,19 @@ where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha
 \subsection{Generative Model}
 \label{sec:background_diffusion_reverse}
 
-Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda$-dependent score network \cite{Generative_Modelling_By_Estimating_Gradients_Song} that approximates the score of $q(\mathbf{z}_t)$ such that:
+Anderson \cite{Reverse_time_diffusion_Anderson} shows that the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by a second diffusion process, running backwards in time and given by the reverse-time SDE:
+\begin{align}
+      d\mathbf{z}_t=\left[\mathbf{f}(\mathbf{z}_t, t)-g(t)^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)\right]dt + g(t)d\bar{\mathbf{w}_t}
+\end{align}
+where $\bar{\mathbf{w}}_t$ is a standard Wiener process when time flows backwards. Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda$-dependent score network \cite{Generative_Modelling_By_Estimating_Gradients_Song} that approximates the score of $q(\mathbf{z}_t)$ such that:
 \begin{align}
       \mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)\label{eq:score_network}
 \end{align}
-Anderson \cite{Reverse_time_diffusion_Anderson} showed that if we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$ then the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by the reverse-time SDE:
+If we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$, then the reverse-time SDE is exactly given by:
 \begin{align}
-      d\mathbf{z}=\left[\mathbf{f}(\mathbf{z}, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\bar{\mathbf{w}}
+      d\mathbf{z}_t=\left[\mathbf{f}(\mathbf{z}_t, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\bar{\mathbf{w}_t}
 \end{align}
-where $\bar{\mathbf{w}}$ is a standard Wiener process when time flows backwards. In the broader literature, diffusion models utilise a variety of numerical solvers to provide approximate trajectories of the reverse-time SDE. In this work, we sequentially generate latent variables starting from $t=1$ and working backwards to $t=0$, over $T$ uniformly-spaced discrete timesteps. More formally, this comprises a hierarchical generative model that defines a joint distribution over latent variables as follows:
+In the broader literature, diffusion models utilise a variety of numerical solvers to provide approximate trajectories of the reverse-time SDE. In this work, we sequentially generate latent variables starting from $t=1$ and working backwards to $t=0$, over $T$ uniformly-spaced discrete timesteps. More formally, this comprises a hierarchical generative model that defines a joint distribution over latent variables as follows:
 \begin{align}
       p_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1)=p_\theta(\mathbf{z}_1)\prod_{i=1}^T p_\theta(\mathbf{z}_{s(i)}|\mathbf{z}_{t(i)})
 \end{align}
@@ -843,7 +847,52 @@ Assuming the reconstruction loss is approximately zero, the ELBO loss given in E
 
 In Section \ref{sec:background_conditional}, we introduced the concept of conditional generation. In this work, however, we do not train a conditional model explicitly. Instead, we utilise \textit{reconstruction-guided sampling} \cite{VDM_Ho}: a sophisticated technique that derives a conditional model approximately from an unconditional model. Reconstruction-guided sampling is advantageous, as it enables us to train only a single unconditional model, which we can then use to facilitate a wide range of conditional generation tasks.
 
-We denote the known and unknown elements of a tensor $\mathbf{x}$ by $\mathbf{x}^a$ and $\mathbf{x}^b$, respectively. 
+Denote by $\Omega(\mathbf{x})$ and $\bar\Omega(\mathbf{x})$ the known and unknown dimensions of $\mathbf{x}$, respectively. Our goal is to sample from the following conditional model:
+\begin{align}
+      p_\theta(\bar\Omega(\mathbf{x})|\Omega(\mathbf{x}))
+\end{align}
+We write the forward diffusion process for the unknown dimensions as the following SDE:
+\begin{align}
+      d\bar\Omega(\mathbf{z}_t)=\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) + g(t)d\mathbf{w}_t
+\end{align}
+The corresponding reverse-time SDE conditioned on $\Omega(\mathbf{x})$ is:
+\begin{align}
+      d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))\right]dt + g(t)d \bar{\mathbf{w}}_t
+\end{align}
+Although $q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))$ is intractable, we can construct an unbiased estimator as follows:
+\begin{align}
+      q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))&=\int q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x})) d\Omega(\mathbf{z}_t)\\
+      &=\mathbb{E}_{\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))}\left[q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\right]\\
+      &\simeq q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))
+\end{align}
+We can formulate the score of the unbiased estimator as follows:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}),\Omega(\mathbf{z}_t))&=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))-\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\Omega(\mathbf{z}_t),\Omega(\mathbf{x}))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t)) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\label{eq:recon_reverse_sde}
+\end{align}
+where $[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]$ denotes a vector such that:
+\begin{align}
+      \Omega([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) = \Omega(\mathbf{z}_t)\\
+      \bar\Omega([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) = \bar\Omega(\mathbf{z}_t)
+\end{align}
+The second term in Equation \ref{eq:recon_reverse_sde} is intractable. However, assuming that all of the gradients are zero, we can formulate the reverse-time SDE as follows:
+\begin{align}
+      d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2\nabla_{\bar\Omega(\mathbf{z}_t)}\log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\right]dt + g(t)d \bar{\mathbf{w}}_t
+\end{align}
+This reverse-time SDE yields only a slight adjustment to the generative procedure defined in Section \ref{sec:background_diffusion_reverse}. Namely, at each time step, we replace the dimensions of $\mathbf{z}_t$ corresponding to the known dimensions of $\mathbf{x}$ with an exact sample from the forward process:
+\begin{align}
+      \Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))
+\end{align}
+Ho et al. \cite{VDM_Ho} found that this process, known as \textit{imputation} \cite{Score_Based_Song}, does not work well for video diffusion models. They found that, although a given $\bar\Omega(\mathbf{x})$ will often appear reasonable in isolation, it will often not be coherent with $\Omega(\mathbf{x})$. They proposed to approximate $q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])$ with a multivariate Gaussian of the form:
+\begin{align}
+      q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) \approx \mathcal{N}\left(\Omega(\mathbf{x}); \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right), \left(\frac{\sigma_t^2}{\alpha_t^2}\right)\mathbf{I}\right)
+\end{align}
+Under this approximation, the second term of Equation \ref{eq:recon_reverse_sde} is thus approximated by:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\approx-\frac{\alpha_t^2}{2\sigma_t^2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right)\right\Vert_2^2
+\end{align}
 
 \subsection{U-Net}
 \label{sec:background_unet}
