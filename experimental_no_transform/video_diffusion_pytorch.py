@@ -18,8 +18,8 @@ from rotary_embedding_torch import RotaryEmbedding
 
 from matplotlib import pyplot as plt
 
-# PR_MAX = 76.96769714355469
-PR_MAX = 8.773123741149902
+PR_MAX = 76.96769714355469
+# PR_MAX = 8.773123741149902
 PR_MIN = 0.
 
 # helpers functions
@@ -646,8 +646,8 @@ class GaussianDiffusion(nn.Module):
         # Unnormalize
         samples = ((samples + 1) / 2) * (PR_MAX - PR_MIN) + PR_MIN
 
-        # return samples
-        return torch.square(samples)
+        return samples
+        # return torch.square(samples)
 
     def sample_recon_guidance(self, x_a, indices_a):
         b = x_a.shape[0]

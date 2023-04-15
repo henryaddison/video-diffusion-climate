@@ -548,7 +548,7 @@ where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha
 \subsection{Generative Model}
 \label{sec:background_diffusion_reverse}
 
-Anderson \cite{Reverse_time_diffusion_Anderson} shows that the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by a second diffusion process, running backwards in time and given by the reverse-time SDE:
+Anderson \cite{Reverse_Time_Diffusion_Anderson} shows that the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by a second diffusion process, running backwards in time and given by the reverse-time SDE:
 \begin{align}
       d\mathbf{z}_t=\left[\mathbf{f}(\mathbf{z}_t, t)-g(t)^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)\right]dt + g(t)d\bar{\mathbf{w}_t}
 \end{align}
@@ -773,7 +773,7 @@ where $\delta$ is the Dirac delta distribution. Similarly, with sufficiently sma
 \end{align}
 so the KL divergence prior loss term likewise approaches zero.
 
-In Appendix C of \cite{Understanding_Diffusion_Objective_Kingma}, Kingma and Gao showed that $\mathcal{L}_\Lambda'(\lambda)$---which, with slight abuse of terminology, they refer to as the \textit{time derivative}---simplifies to a remarkable degree:
+In Appendix C of \cite{Understanding_Diffusion_Objective_Kingma}, Kingma and Gao showed that $\mathcal{L}_\Lambda'(\lambda)$---which, with a slight abuse of terminology, they refer to as the \textit{time derivative}---simplifies to a remarkable degree:
 \begin{align}
       \mathcal{L}_{\Lambda}'(\lambda)=\frac{d}{d\lambda}\mathcal{L}_\Lambda(\lambda)=\frac{1}{2}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\Vert \boldsymbol\epsilon -\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]\label{eq:time_derivative}
 \end{align} 
@@ -842,56 +842,89 @@ Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)
 
 Assuming the reconstruction loss is approximately zero, the ELBO loss given in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with $w(\lambda) = 1$.
 
-\subsection{Reconstruction-Guided Sampling for Conditional Generation}
-\label{sec:background_diffusion_reconstruction_guided_sampling}
+\subsection{Imputation for Conditional Generation}
 
-In Section \ref{sec:background_conditional}, we introduced the concept of conditional generation. In this work, however, we do not train a conditional model explicitly. Instead, we utilise \textit{reconstruction-guided sampling} \cite{VDM_Ho}: a sophisticated technique that derives a conditional model approximately from an unconditional model. Reconstruction-guided sampling is advantageous, as it enables us to train only a single unconditional model, which we can then use to facilitate a wide range of conditional generation tasks.
+In Section \ref{sec:background_conditional}, we introduced the concept of conditional generation. In this work, however, we do not train a conditional model explicitly. Instead, we utilise \textit{reconstruction-guided sampling} \cite{VDM_Ho}: a sophisticated technique that derives a conditional model approximately from an unconditional model. More specifically, reconstruction-guided sampling facilitates the conditional generation of the unknown dimensions of some observed datapoint $\mathbf{x}$ given the known dimensions. Deriving such a conditional model approximately from an unconditional model is advantageous: it enables us to train only a single unconditional model, which we can then flexibly use to facilitate the conditional generation of any unknown subset of dimensions.  In this work, we utilise reconstruction-guided sampling to facilitate three distinct conditional generation tasks: temporal interpolation, forecasting, and autoregressive generation of arbitrarily long samples. 
 
-Denote by $\Omega(\mathbf{x})$ and $\bar\Omega(\mathbf{x})$ the known and unknown dimensions of $\mathbf{x}$, respectively. Our goal is to sample from the following conditional model:
+Reconstruction-guided sampling extends a prior technique known as \textit{imputation}, introduced by Song et al. \cite{Score_Based_Song}. Thus, we first introduce imputation for completeness and to better motivate our use of reconstruction-guided sampling in this work.
+
+We denote by $\Omega(\mathbf{x})$ and $\bar\Omega(\mathbf{x})$ the known and unknown dimensions of some observed datapoint $\mathbf{x}$, respectively. Formally, our goal is to derive the following conditional model without training it explicitly:
 \begin{align}
       p_\theta(\bar\Omega(\mathbf{x})|\Omega(\mathbf{x}))
 \end{align}
-We write the forward diffusion process for the unknown dimensions as the following SDE:
+We can write the forward diffusion process for the unknown dimensions as the following SDE:
 \begin{align}
       d\bar\Omega(\mathbf{z}_t)=\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) + g(t)d\mathbf{w}_t
 \end{align}
-The corresponding reverse-time SDE conditioned on $\Omega(\mathbf{x})$ is:
+Anderson \cite{Reverse_Time_Diffusion_Anderson} shows that the corresponding reverse-time SDE conditioned on the known dimensions $\Omega(\mathbf{x})$ is given by:
 \begin{align}
-      d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))\right]dt + g(t)d \bar{\mathbf{w}}_t
+      d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))\right]dt + g(t)d \bar{\mathbf{w}}_t\label{eq:recon_reverse_sde}
 \end{align}
-Although $q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))$ is intractable, we can construct an unbiased estimator as follows:
+Although $q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))$ is intractable, we can approximate it as follows:
 \begin{align}
-      q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))&=\int q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x})) d\Omega(\mathbf{z}_t)\\
+      q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))&=\int q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))d\Omega(\mathbf{z}_t)\\
+      &=\int q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x})) d\Omega(\mathbf{z}_t)\\
       &=\mathbb{E}_{\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))}\left[q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\right]\\
-      &\simeq q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))
+      &\approx \mathbb{E}_{\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))}\left[q(\bar\Omega(\mathbf{z}_t)| \Omega(\mathbf{z}_t))\right]\label{eq:imputation_assumption}
 \end{align}
-We can formulate the score of the unbiased estimator as follows:
+Song et al. \cite{Score_Based_Song} argue that the approximation in Equation \ref{eq:imputation_assumption} is appropriate since for small $t$, $\Omega(\mathbf{x})$ is almost the same as $\Omega(\mathbf{z}_t)$; and for larger $t$, $\Omega(\mathbf{x})$ is further away from $\bar\Omega(\mathbf{z}_t)$ in the Markov chain, and thus has a smaller impact on $\bar\Omega(\mathbf{z}_t)$. Assuming the approximation holds, we can derive an unbiased estimator of $q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))$ as:
 \begin{align}
-      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}),\Omega(\mathbf{z}_t))&=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))-\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\Omega(\mathbf{z}_t),\Omega(\mathbf{x}))\\
-      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\\
-      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t)) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t))\\
-      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\label{eq:recon_reverse_sde}
+      q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x})) \approx \mathbb{E}_{\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))}\left[q(\bar\Omega(\mathbf{z}_t)| \Omega(\mathbf{z}_t))\right] \simeq q(\bar\Omega(\mathbf{z}_t)| \Omega(\mathbf{z}_t))
+\end{align}
+The score of the natural logarithm of the unbiased estimator is given by:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t)| \Omega(\mathbf{z}_t))&=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t)) - \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])
 \end{align}
 where $[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]$ denotes a vector such that:
 \begin{align}
       \Omega([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) = \Omega(\mathbf{z}_t)\\
       \bar\Omega([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) = \bar\Omega(\mathbf{z}_t)
 \end{align}
-The second term in Equation \ref{eq:recon_reverse_sde} is intractable. However, assuming that all of the gradients are zero, we can formulate the reverse-time SDE as follows:
+Thus, assuming the assumption given in Equation \ref{eq:imputation_assumption} holds, we can consequently approximate the reverse-time SDE conditioned on $\Omega(\mathbf{x})$ given in Equation \ref{eq:recon_reverse_sde} as follows:
 \begin{align}
       d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2\nabla_{\bar\Omega(\mathbf{z}_t)}\log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\right]dt + g(t)d \bar{\mathbf{w}}_t
 \end{align}
-This reverse-time SDE yields only a slight adjustment to the generative procedure defined in Section \ref{sec:background_diffusion_reverse}. Namely, at each time step, we replace the dimensions of $\mathbf{z}_t$ corresponding to the known dimensions of $\mathbf{x}$ with an exact sample from the forward process:
+If we have a perfect score model, $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t} q(\mathbf{z}_t)$, then the reverse-time SDE is thus given by:
 \begin{align}
-      \Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))
+      d\bar\Omega(\mathbf{z}_t)=\left[\mathbf{f}(\bar\Omega(\mathbf{z}_t), t) - g(t)^2 \mathbf{s}_\theta([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t)\right]dt + g(t)d \bar{\mathbf{w}}_t\label{eq:imputation_reverse_sde}
 \end{align}
-Ho et al. \cite{VDM_Ho} found that this process, known as \textit{imputation} \cite{Score_Based_Song}, does not work well for video diffusion models. They found that, although a given $\bar\Omega(\mathbf{x})$ will often appear reasonable in isolation, it will often not be coherent with $\Omega(\mathbf{x})$. They proposed to approximate $q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])$ with a multivariate Gaussian of the form:
+To provide a more intuitive link between Equation \ref{eq:imputation_reverse_sde} and the generative procedure in Section \ref{sec:background_climate_generative}, we also define the imputation method as a conditional denoiser $\hat{\mathbf{x}}^{\mathrm{C}}_\theta(\mathbf{z}_t, \lambda_t, \Omega(\mathbf{x}))$, which takes the known dimensions of $\mathbf{x}$ as input:
 \begin{align}
-      q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) \approx \mathcal{N}\left(\Omega(\mathbf{x}); \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right), \left(\frac{\sigma_t^2}{\alpha_t^2}\right)\mathbf{I}\right)
+      \hat{\mathbf{x}}^{\mathrm{C}}_\theta(\mathbf{z}_t, \lambda_t, \Omega(\mathbf{x}))=\bar\Omega\left(\hat{\mathbf{x}}_\theta([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t )\right)
 \end{align}
-Under this approximation, the second term of Equation \ref{eq:recon_reverse_sde} is thus approximated by:
+Thus, the imputation method for conditional generation yields only a slight adjustment to the generative procedure defined in Section \ref{sec:background_diffusion_reverse}. Namely, at each step of the discrete-time ancestral sampler, we replace the dimensions of $\mathbf{z}_t$ corresponding to the known dimensions of $\mathbf{x}$ with an exact sample from the forward process: $\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))$.
+
+\subsection{Reconstruction-Guided Sampling for Conditional Generation}
+\label{sec:background_diffusion_reconstruction_guided_sampling}
+
+Ho et al. \cite{VDM_Ho} showed that the imputation process produces incoherent samples when applied to video diffusion models. Namely, although a given $\bar\Omega(\mathbf{x})$ will often appear reasonable in isolation, it will often not be coherent with $\Omega(\mathbf{x})$. This incoherency is likely because the assumption in Equation \ref{eq:imputation_assumption} does not hold for all $t\in[0,1]$. Avoiding the assumption, we instead construct an unbiased estimator for $q(\bar\Omega(\mathbf{z}_t|\Omega(\mathbf{x})))$ as:
 \begin{align}
-      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\approx-\frac{\alpha_t^2}{2\sigma_t^2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right)\right\Vert_2^2
+      q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))&=\mathbb{E}_{\Omega(\mathbf{z}_t)\sim q(\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))}\left[q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\right] \simeq q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}), \Omega(\mathbf{z}_t))
+\end{align}
+The score of the natural logarithm of the unbiased estimator is given by:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}),\Omega(\mathbf{z}_t))&=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))-\nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\Omega(\mathbf{z}_t),\Omega(\mathbf{x}))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{x}), \Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t)) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|\bar\Omega(\mathbf{z}_t), \Omega(\mathbf{z}_t))\\
+      &=\nabla_{\bar\Omega(\mathbf{z}_t)} \log q([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) + \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\label{eq:recon_reverse_sde_score}
+\end{align}
+The second term in Equation \ref{eq:recon_reverse_sde_score} is missing in the imputation approach. Plugging in this missing term would make conditional sampling exact. However, since $q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])$ is not available in closed form, we must approximate it. Ho et al. \cite{VDM_Ho} proposed to approximate it with a multivariate Gaussian of the form:
+\begin{align}
+      q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]) \approx \mathcal{N}\left(\Omega(\mathbf{x}); \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t \right)\right), \left(\frac{\sigma_t^2}{\alpha_t^2}\right)\mathbf{I}\right)
+\end{align}
+Under this approximation, the second term of Equation \ref{eq:recon_reverse_sde_score} is thus itself approximated by:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)} \log q(\Omega(\mathbf{x})|[\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)])\approx-\frac{\alpha_t^2}{2\sigma_t^2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t \right)\right)\right\Vert_2^2
+\end{align}
+Ho et al. \cite{VDM_Ho} interpret the inclusion of this term---absent in the imputation method---as a form of \textit{guidance} based on the model's reconstruction of the conditioning data. They found empirically that---as with other forms of guidance---including a large weighting term $w_r>1$ tends to improve sample quality further. They refer to this technique as \textit{reconstruction-guided sampling}. Formally, assuming we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t} q(\mathbf{z}_t)$, reconstruction-guided sampling derives a conditional model from an unconditional model by approximating the score given in Equation \ref{eq:recon_reverse_sde} by:
+\begin{align}
+      \nabla_{\bar\Omega(\mathbf{z}_t)}\log q(\bar\Omega(\mathbf{z}_t)|\Omega(\mathbf{x}))&\approx \mathbf{s}_\theta ([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t)\\&-\frac{w_r\alpha_t^2}{2\sigma_t^2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t \right)\right)\right\Vert_2^2
+\end{align}
+Writing the reconstruction-guidance method as a conditional denoiser $\hat{\mathbf{x}}^{\mathrm{C}}_\theta(\mathbf{z}_t, \lambda_t, \Omega(\mathbf{x}))$ yields:
+\begin{align}
+      \hat{\mathbf{x}}^{\mathrm{C}}_\theta(\mathbf{z}_t, \lambda_t, \Omega(\mathbf{x}))=\bar\Omega\left(\hat{\mathbf{x}}_\theta([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t )\right) - \frac{w_r\alpha_t}{2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right)\right\Vert_2^2
 \end{align}
 
 \subsection{U-Net}
@@ -902,10 +935,24 @@ Under this approximation, the second term of Equation \ref{eq:recon_reverse_sde}
 \chapter{Climate Background}
 \label{chap:background_climate}
 
+\section{Climate Simulations}
+\label{sec:background_climate_simulations}
+
+\section{Generative Models for Climate Simulations}
+\label{sec:background_climate_generative}
+
 % -----------------------------------------------------------------------------
 
 \chapter{Results}
 \label{chap:results}
+
+\section{Importance of the Transformation}
+
+\section{Temporal Interpolation}
+
+\section{Autoregressive Generation of Longer Sequences}
+
+\section{Forecasting}
 
 % -----------------------------------------------------------------------------
 
