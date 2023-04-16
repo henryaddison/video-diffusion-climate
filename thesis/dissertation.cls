@@ -73,6 +73,7 @@
 \usetikzlibrary{arrows}
 \DeclareMathOperator*{\argmax}{arg\,max\,}
 \DeclareMathOperator*{\argmin}{arg\,min\,}
+\graphicspath{{./images/}}
 
 % =============================================================================
 

@@ -2,8 +2,8 @@ import torch
 from video_diffusion_pytorch import Unet3D, GaussianDiffusion, num_to_groups
 
 NUM_SAMPLES = 16384
-BATCH_SIZE = 32
-MILESTONE = 182
+BATCH_SIZE = 16
+MILESTONE = 218
 
 model = Unet3D(
     dim=64,
@@ -58,4 +58,4 @@ for batch_size in batch_sizes:
     new_samples=diffusion.sample(batch_size = batch_size)
     new_samples = inverse_tensor(new_samples).cuda()
     samples=torch.cat((samples, new_samples), dim = 0)
-    torch.save(samples, f"/user/home/cj19328/samples.pt")
+    torch.save(samples, f"/user/home/cj19328/sample_transform_0.1_lambda_30.pt")

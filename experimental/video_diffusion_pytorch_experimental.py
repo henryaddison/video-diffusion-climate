@@ -527,9 +527,8 @@ class MonotonicNet(nn.Module):
     def log_dy_dx(self, x, y):
         dy_dx = torch.autograd.grad(y.sum(), x, retain_graph=True, create_graph=True)[0]
         log_dy_dx = torch.log(dy_dx)
-        # log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
-        # return log_dy_dx.mean()
-        return log_dy_dx
+        log_dy_dx *= x > 2 * ((0.01 - PR_MIN) / (PR_MAX - PR_MIN))
+        return log_dy_dx.mean()
 
     @torch.inference_mode()
     def plot(self):
@@ -538,10 +537,10 @@ class MonotonicNet(nn.Module):
         ys = self.forward(xs_normalised)
         print("ys_min, ys_max:", ys[0].item(), ys[-1].item())
         ys = self.normalise(ys)
-        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_elbo.pt")
+        torch.save(torch.stack([xs.flatten(), ys.flatten()], dim=1).cpu(), "transform_0.1_lambda_30.pt")
         plt.figure()
         plt.plot(xs.cpu(), ys.cpu())
-        plt.savefig("monotonic_net_transform_elbo.png")
+        plt.savefig("monotonic_net_transform_0.1_lambda_30.png")
         plt.close()
 
 
@@ -563,9 +562,6 @@ class GaussianDiffusion(nn.Module):
         self.num_timesteps = num_timesteps
         self.monotonic_net = MonotonicNet()
         self.omega_r = 100000 # Reconstruction-guided sampling
-
-        self.t0 = (2 / math.pi) * math.atan(math.exp(-(1 / 2) * 30))
-        self.t1 = (2 / math.pi) * math.atan(math.exp(-(1 / 2) * -30))
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
@@ -674,7 +670,7 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         return alpha_t * x + sigma_t * noise
         
-    def p_losses(self, x, step):
+    def p_losses(self, x):
         b = x.shape[0]
 
         x.requires_grad = True
@@ -695,24 +691,16 @@ class GaussianDiffusion(nn.Module):
         alpha_t, sigma_t = self.log_snr_to_alpha_sigma(lambda_t)
         v_target = alpha_t * noise - sigma_t * y
 
-        diffusion_loss = F.mse_loss(v, v_target, reduction = 'none')
-
-        coef = math.pi * (self.t1 - self.t0) / 2 * torch.exp(lambda_t / 2)
-
-        if step <= 50000:
-            loss = coef * diffusion_loss - log_dy_dx
-        else:
-            loss = diffusion_loss
-
-        loss = loss.mean()
-        print("Diffusion loss and -log|dy/dx|", diffusion_loss.mean().item(), -log_dy_dx.mean().item())
+        diffusion_loss = F.mse_loss(v, v_target)
+        loss = diffusion_loss - log_dy_dx
+        print("Diffusion loss and -log|dy/dx|", diffusion_loss.item(), -log_dy_dx.item())
 
         return loss
 
-    def forward(self, x, step):
+    def forward(self, x):
         x = 2 * ((x - PR_MIN) / (PR_MAX - PR_MIN)) # In the range [0, 2] just for better interpretability of log|dy / dx|
 
-        return self.p_losses(x, step)
+        return self.p_losses(x)
 
 
 class Dataset(data.Dataset):
@@ -822,7 +810,7 @@ class Trainer(object):
                     data = data.cuda()
 
                 with autocast(enabled = self.amp):
-                    loss = self.model(data, self.step)
+                    loss = self.model(data)
 
                     self.scaler.scale(loss / self.gradient_accumulate_every).backward()
 
@@ -832,10 +820,6 @@ class Trainer(object):
             self.scaler.update()
             self.opt.zero_grad()
             self.model.monotonic_net.enforce_monotonicity()
-
-            if self.step == 50000:
-                for param in self.model.monotonic_net.parameters():
-                    param.requires_grad = False
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()

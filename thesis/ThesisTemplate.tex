@@ -328,27 +328,26 @@ We refer to the broad class of generative models trained to maximise the expecte
 \section{Variational Autoencoders}
 \label{sec:background_vae}
 
-\subsection{Overview}
+\subsection{Components of the Basic Variational Autoencoder}
 \label{sec:background_vae_latent}
 
-The variational autoencoder (VAE) \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} is one example of a model that utilises latent variables. In its simplest form, the VAE is a latent-variable model $p_\theta(\mathbf{x},\mathbf{z})$ with a single latent $\mathbf{z}$. We assume that each observed datapoint $\mathbf{x}\in\mathcal{D}$ is generated via a two-step process. First, a latent $\mathbf{z}$ is generated from some true prior distribution $p^*(\mathbf{z})$, followed by an observed value $\mathbf{x}$ generated from some true conditional distribution $p^*(\mathbf{x}|\mathbf{z})$. 
-
-ur model takes the form:
+The variational autoencoder (VAE) \cite{Autoencoding_Variational_Bayes_Kingma,Stochastic_Backpropagation_Rezende} is an important example of a likelihood-based generative model. In its simplest form, the VAE is a latent-variable model $p_\theta(\mathbf{x},\mathbf{z})$ with a single latent $\mathbf{z}$. We assume that each observed datapoint $\mathbf{x}$ is generated via a two-step process. First, a latent $\mathbf{z}$ is generated from some true prior distribution $p^*(\mathbf{z})$, followed by an observed value $\mathbf{x}$ generated from some true conditional distribution $p^*(\mathbf{x}|\mathbf{z})$. Thus, our model $p_\theta(\mathbf{x},\mathbf{z}$) we seek to optimise such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$ takes the following factorised form:
 \begin{align}
       p_\theta(\mathbf{x},\mathbf{z})=p_\theta(\mathbf{z})p_\theta(\mathbf{x}|\mathbf{z})
 \end{align}
-The prior $p_\theta(\mathbf{z})$ over the latent variable is often chosen to be the multivariate standard Gaussian:
+where, naturally, we need to specify our two distributions: $p_\theta(\mathbf{z})$ and $p_\theta(\mathbf{x}|\mathbf{z})$. We refer to $p_\theta(\mathbf{z})$ as the prior over $\mathbf{z}$, and one common choice is the standard Gaussian:
 \begin{align}
       p_\theta(\mathbf{z})=\mathcal{N}(\mathbf{z};\mathbf{0}, \mathbf{I})
 \end{align}
-The true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, but we commonly assume it takes on the form of a multivariate Gaussian with diagonal covariance. As such, we introduce a variational approximate posterior, defined as:
+Furthermore, we refer to $p_\theta(\mathbf{x}|\mathbf{z})$ as the stochastic \textit{decoder} since given a latent $\mathbf{z}$ it produces a distribution over the possible corresponding values of $\mathbf{x}$. As an example, we can select $p_\theta(\mathbf{x}|\mathbf{z})$ be a multivariate Gaussian with diagonal covariance:
+\begin{align}
+      p_\theta(\mathbf{x}|\mathbf{z})=\mathcal{N}(\mathbf{x}; \boldsymbol{\mu}_\theta (\mathbf{z}), \mathrm{diag}(\boldsymbol\sigma_\theta(\mathbf{z}))^{\circ 2})
+\end{align}
+where $\boldsymbol{\mu}_\theta(\mathbf{z})$ and $\boldsymbol\sigma_\theta(\mathbf{z})$ are outputs from a neural network with parameters $\theta$. One final, crucial defining feature of the VAE is the stochastic \textit{encoder} $q_\phi(\mathbf{z}|\mathbf{x})$, also referred to as the \textit{inference model}, with variational parameters $\phi$. The stochastic encoder $q_\phi(\mathbf{z}|\mathbf{x})$ approximates the intractable posterior $p_\theta(\mathbf{z}|\mathbf{x})$ of the generative model. Again, a common choice is for $q_\phi(\mathbf{z}|\mathbf{x})$ to be a multivariate Gaussian with diagonal covariance:
 \begin{align}
       q_\phi(\mathbf{z}|\mathbf{x})=\mathcal{N}(\mathbf{z}, \boldsymbol{\mu}_\phi(\mathbf{z}), \mathrm{diag}(\boldsymbol\sigma_\phi(\mathbf{z}))^{\circ 2})
 \end{align}
-with variational parameters $\phi$.
-
-$p_\theta(\mathbf{x}|\mathbf{z})$ and $q_\phi(\mathbf{z}|\mathbf{x})$ are often referred to as the \textit{decoder} and \textit{encoder}, respectively.
-
+Figure \ref{fig:vae} provides a graphical depiction of the VAE.
 \begin{figure}[htbp]
       \centering
       \begin{tikzpicture}[->, >=stealth', auto, node distance=3cm, main node/.style={circle, draw, minimum size=1.25cm}]
@@ -369,26 +368,13 @@ $p_\theta(\mathbf{x}|\mathbf{z})$ and $q_\phi(\mathbf{z}|\mathbf{x})$ are often 
 \subsection{Evidence Lower Bound Objective}
 \label{sec:background_vae_elbo}
 
-For the basic VAE with a single latent variable, we sample from $p_\theta(\mathbf{x})$ by first sampling the latent $\mathbf{z}$ from some prior $p_\theta(\mathbf{z})$ and then sampling $\mathbf{x}$ from $p_\theta(\mathbf{x}|\mathbf{z})$; this defines a generative model of the form:
+The VAE falls into the broad class of likelihood-based generative models. However, the likelihood $p_\theta(\mathbf{x})$ cannot be optimised directly, as the VAE model does not make common simplifying assumptions about marginal and posterior probabilities. Notably, we assume the model's marginal likelihood $p(\mathbf{x})$ given by:
 \begin{align}
       p_\theta(\mathbf{x}) = \int p_\theta(\mathbf{x}|\mathbf{z})p_\theta(\mathbf{z}) d\mathbf{z}
 \end{align}
-However, 
+does not have an analytic solution or efficient estimator. In addition, we assume the model's posterior density $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, so we cannot employ the expectation-maximisation algorithm.
 
-
-
-Firstly, we cannot simply marginalise out the latent variable $\mathbf{z}$ via:
-\begin{align}
-      p_\theta(\mathbf{x})=\int p_\theta(\mathbf{x},\mathbf{z})d\mathbf{z}
-\end{align}
-since the integral does not have an analytic solution or efficient estimator. Secondly, we cannot appeal to the chain rule of probability:
-\begin{align}
-      p_\theta(\mathbf{x})=\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}
-\end{align}
-since it requires access to a ground truth latent encoder $p_\theta(\mathbf{z}|\mathbf{x})$.
-
-
-
+Not making these simplifying assumptions is the reason for introducing the inference model $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the model's intractable posterior $p_\theta(\mathbf{z}|\mathbf{x})$. With the introduction of the inference model, we can derive a variational lower bound on the likelihood $p_\theta(\mathbf{x})$:
 \begin{align}
       \log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\\
       &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
@@ -402,9 +388,9 @@ The second term in Equation \ref{eq:vae_elbo} is the KL divergence of $q_\phi(\m
 \begin{align}
       D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\ge 0
 \end{align}
-and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the \textit{evidence lower bound objective} (ELBO), and by the non-negativity of the KL divergence, serves as a lower bound on the log-likelihood of the observed variable $\mathbf{x}$:
+and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the \textit{evidence lower bound objective} (ELBO), denoted $\mathcal{L}_{\mathrm{ELBO}}$, and by the non-negativity of the KL divergence, serves as a lower bound on the log-likelihood of the observed variable $\mathbf{x}$:
 \begin{align}
-      \log p_\theta(\mathbf{x})&\ge \mathrm{ELBO}(\mathbf{x})\\
+      \log p_\theta(\mathbf{x})&\ge \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
       &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
 \end{align}
 As such, maximisation of the ELBO accomplishes two things. Firstly, it will approximately maximise the log-likelihood of the observed variable $\mathbf{x}$---the overriding goal of a likelihood-based generative model. Secondly, it will minimise the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ from $p_\theta(\mathbf{z}|\mathbf{x})$, thus encouraging the approximate posterior $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ as closely as possible. 
@@ -440,13 +426,16 @@ Figure \ref{fig:mhvae} illustrates the MHVAE model. For the generative model, th
       \label{fig:mhvae}
 \end{figure}
 
-As an extreme, in the limit of $N_\mathbf{z}\to\infty$, we instead write our latent variables in terms of a continuous-time variable $t\in[0,1]$ as:
+\subsection{Infinitely Deep Markovian Hierarchical Variational Autoencoders}
+\label{sec:background_vae_infinite}
+
+In the limit of $N_\mathbf{z}\to\infty$, we instead notationally write our latent variables in terms of a continuous-time variable $t\in[0,1]$ as:
 \begin{align}
       \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
 We can formulate the ELBO for the continuous-time MHVAE as follows:
 \begin{align}
-      p_\theta(\mathbf{x})&\ge \mathrm{ELBO}(\mathbf{x})\\
+      p_\theta(\mathbf{x})&\ge \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
       &=\mathbb{E}_{\mathbf{z}_0,...,\mathbf{z}_1\sim q_\phi(\mathbf{z}_0,...,\mathbf{z}_1|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right) \right]\\
       &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
 \end{align}
@@ -457,7 +446,7 @@ Per datapoint $\mathbf{x}$, we define $\mathcal{L}_T(t)$ as the KL divergence of
 \end{align}
 We can substitute this into the ELBO and use the second fundamental theorem of calculus to yield the following form for the ELBO, defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathrm{ELBO}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
+      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
       &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(0)\\
       &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(1)+\int_0^1\mathcal{L}'_T(t)\mathrm{d}t \label{eq:elbo_mhvae}
 \end{align}
@@ -466,8 +455,8 @@ This form for the ELBO may seem unconventional. However, we introduce it here to
 \section{Score-Based Generative Models}
 \label{sec:background_score}
 
-\subsection{Score Networks}
-\label{sec:background_score_score_network}
+% \subsection{Score Networks}
+% \label{sec:background_score_score_network}
 
 Score-based generative models \cite{Generative_Modelling_By_Estimating_Gradients_Song,Score_Based_Song} are an alternative to likelihood-based generative models. We define the $score$ of a probability density $p(\mathbf{x})$ to be:
 \begin{align}
@@ -479,84 +468,96 @@ The \textit{score network} $\mathbf{s}_\theta$ is a neural network parameterised
 \end{align}
 Importantly, we accomplish this without training a model to directly approximate the true data distribution $p^*(\mathbf{x})$ in advance.
 
-\subsection{Example: Denoising Score Matching with Langevin Dynamics}
-\label{sec:background_score_denoising}
+% \subsection{Example: Denoising Score Matching with Langevin Dynamics}
+% \label{sec:background_score_denoising}
 
-Denoising score matching with Langevin dynamics (SMLD) \cite{Generative_Modelling_By_Estimating_Gradients_Song} is an example of a score-based generative model that enables us to generate data starting from Gaussian noise. While we do not use SMLD explicitly in this work, we introduce it here to better motivate techniques employed in the diffusion model described in Section \ref{sec:background_diffusion}. We introduce SMLD in continuous time. Let us consider a set of positive noise scales:
-\begin{align}
-      \{ \sigma_t \mid t\in[0,1] \}
-\end{align}
-such that $\sigma_t$ is a strictly monotonically increasing function of time $t\in[0,1]$. For each noise scale $\sigma_t$, we define a corresponding Gaussian noise perturbation kernel:
-\begin{align}
-      q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t; \mathbf{x}, \sigma_t^2\mathbf{I}\right)
-\end{align}
-For all $t\in[0,1]$ the marginal distribution $q(\mathbf{z}_t)$ is given by:
-\begin{align}
-      q(\mathbf{z}_t)=\int p^*(\mathbf{x})q(\mathbf{z}_t|\mathbf{x})
-\end{align}
-We define $\sigma_0 = \sigma_{\min}$ and $\sigma_1 = \sigma_{\max}$ such that:
-\begin{align}
-      q(\mathbf{z}_0)&\approx p^*(\mathbf{x})\\
-      q(\mathbf{z}_1)&\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \sigma_{1}^2\mathbf{I})
-\end{align}
-We train a noise-conditional score network $\mathbf{s}_\theta(\mathbf{z}_t, \sigma)$ such that:
-\begin{align}
-      \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)
-\end{align}
-For our generative model, we start by sampling $\mathbf{z}_1\sim \mathcal{N}(\mathbf{z}_1; \mathbf{0}, \sigma_{1}^2\mathbf{I})$ from an isotropic Gaussian distribution with variance $\sigma_1^2=\sigma_{\max}^2$. Then, we sequentially generate $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$ via Langevin Markov chain Monte Carlo:
-\begin{align}
-      \mathbf{z}_s = \mathbf{z}_t + \frac{1}{2}\tau_t \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)+\sqrt{\tau_t}\boldsymbol\epsilon
-\end{align}
-where $\tau_t>0$ is a pre-defined time-dependent step size and $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise.
+% Denoising score matching with Langevin dynamics (SMLD) \cite{Generative_Modelling_By_Estimating_Gradients_Song} is an example of a score-based generative model that enables us to generate data starting from Gaussian noise. While we do not use SMLD explicitly in this work, we introduce it here to better motivate techniques employed in the diffusion model described in Section \ref{sec:background_diffusion}. We introduce SMLD in continuous time. Let us consider a set of positive noise scales:
+% \begin{align}
+%       \{ \sigma_t \mid t\in[0,1] \}
+% \end{align}
+% such that $\sigma_t$ is a strictly monotonically increasing function of time $t\in[0,1]$. For each noise scale $\sigma_t$, we define a corresponding Gaussian noise perturbation kernel:
+% \begin{align}
+%       q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t; \mathbf{x}, \sigma_t^2\mathbf{I}\right)
+% \end{align}
+% For all $t\in[0,1]$ the marginal distribution $q(\mathbf{z}_t)$ is given by:
+% \begin{align}
+%       q(\mathbf{z}_t)=\int p^*(\mathbf{x})q(\mathbf{z}_t|\mathbf{x})
+% \end{align}
+% We define $\sigma_0 = \sigma_{\min}$ and $\sigma_1 = \sigma_{\max}$ such that:
+% \begin{align}
+%       q(\mathbf{z}_0)&\approx p^*(\mathbf{x})\\
+%       q(\mathbf{z}_1)&\approx\mathcal{N}(\mathbf{z}_1;\mathbf{0}, \sigma_{1}^2\mathbf{I})
+% \end{align}
+% We train a noise-conditional score network $\mathbf{s}_\theta(\mathbf{z}_t, \sigma)$ such that:
+% \begin{align}
+%       \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)
+% \end{align}
+% For our generative model, we start by sampling $\mathbf{z}_1\sim \mathcal{N}(\mathbf{z}_1; \mathbf{0}, \sigma_{1}^2\mathbf{I})$ from an isotropic Gaussian distribution with variance $\sigma_1^2=\sigma_{\max}^2$. Then, we sequentially generate $\mathbf{z}_s$ from $\mathbf{z}_t$ where $0\le s < t \le 1$ via Langevin Markov chain Monte Carlo:
+% \begin{align}
+%       \mathbf{z}_s = \mathbf{z}_t + \frac{1}{2}\tau_t \mathbf{s}_\theta(\mathbf{z}_t, \sigma_t)+\sqrt{\tau_t}\boldsymbol\epsilon
+% \end{align}
+% where $\tau_t>0$ is a pre-defined time-dependent step size and $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise.
 
 \section{Diffusion Models}
 \label{sec:background_diffusion}
 
+\subsection{Overview}
+\label{sec:background_diffusion_overview}
+
+Diffusion models \cite{Deep_Unsupervised_Learning_Sohl-Dickstein,DDPM_Ho,Score_Based_Song} are a framework for generative modelling. Diffusion models consist of a \textit{forward diffusion process} that transforms a datapoint into noise, and a \textit{reverse-time generative model} able to transform noise back into a datapoint. As we explore in this section, diffusion models have both likelihood and score-based interpretations.
+
 \subsection{Forward Diffusion Process}
 \label{sec:background_diffusion_forward}
 
-Specified in continuous time, the \textit{forward diffusion process} is a Gaussian diffusion process that defines a sequence of increasingly noisy versions of $\mathbf{x}$, which we call the latent variables:
+Specified in continuous time, the \textit{forward diffusion process} is a Gaussian diffusion process that defines the model's latent variables as a sequence of increasingly noisy versions of $\mathbf{x}$:
 \begin{align}
       \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-Song et al. \cite{Score_Based_Song} showed that an It\^{o} stochastic differential equation (SDE) defines the time evolution of the diffusion process:
+An It\^{o} stochastic differential equation (SDE) defines the time evolution of the diffusion process \cite{Score_Based_Song}:
 \begin{align}
       d\mathbf{z}_t=\mathbf{f}(\mathbf{z}_t,t)dt + g(t)d\mathbf{w}_t\label{eq:forward_sde}
 \end{align}
-where $\mathbf{w}_t$ is the standard Wiener process, $\mathbf{f}(\mathbf{z}_t, t)$ is a vector-valued function called the \textit{drift} coefficient of $\mathbf{z}$, and $g(t)$ is a scalar-function known as the \textit{diffusion} coefficient of $\mathbf{z}_t$. In this work, we use a \textit{variance-preserving} diffusion model, which is defined by:
+where $\mathbf{w}_t$ is the standard Wiener process (i.e. Brownian motion); $\mathbf{f}(\mathbf{z}_t, t):\mathbb{R}^D\to\mathbb{R}^D$ is a vector-valued function called the \textit{drift} coefficient of $\mathbf{z}$; $g(t):\mathbb{R}\to\mathbb{R}$ is a scalar-function known as the \textit{diffusion} coefficient of $\mathbf{z}_t$; and $D$ is the dimensionality of our input data. In this work, we use a \textit{variance-preserving} diffusion model, which we define by the following drift and diffusion coefficients:
 \begin{align}
       \mathbf{f}(\mathbf{z}_t,t)&=-\frac{1}{2}\left(\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\right)\mathbf{z}_t\\
       g(t)^2&=\frac{d}{dt}\log\left(1+\exp(-\lambda_t)\right)\label{eq:diffusion_coefficient_scalar}
 \end{align}
-where $\lambda_t\in[\lambda_{\min}, \lambda_{\max}]$ is a monotonically decreasing scalar-valued function of time $t\in[0,1]$. We provide more details on $\lambda_t$ in Section \ref{sec:background_diffusion_noise_schedule}. 
-
-The forward process forms a conditional joint distribution $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$, whose marginal distribution of each latent variable $\mathbf{z}_t$ given $\mathbf{x}\sim p^*(\mathbf{x})$ is given by:
+where $\lambda_t\in[\lambda_{\min}, \lambda_{\max}]$ is a monotonically decreasing scalar-valued function of time $t\in[0,1]$; we provide more details on $\lambda_t$ in Section \ref{sec:background_diffusion_noise_schedule}. The forward process forms a conditional joint distribution $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$, whose marginal distribution of each latent variable $\mathbf{z}_t$ given the observed variable $\mathbf{x}$ is given by:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{x})=\mathcal{N}\left(\mathbf{z}_t;\alpha_t\mathbf{x},\sigma_t^2\mathbf{I}\right)
       \label{eq:q_z_t_given_x}
 \end{align}
-where $\alpha_t$ and $\sigma_t$ are monotonic functions of $\lambda_t$, with the exact relationship also described in Section \ref{sec:background_diffusion_noise_schedule}. The true distribution $p^*(\mathbf{x})$ plus the conditional joint distribution of the forward model $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$ defines a joint distribution:
+where $\alpha_t$ and $\sigma_t$ are functions of $\lambda_t$, such that:
 \begin{align}
-      q(\mathbf{z}_0,\ldots,\mathbf{z}_1)=\int p^*(\mathbf{x}) q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x}) d\mathbf{x}
+      \alpha_t^2 &= S(\lambda_t)\\
+      \sigma_t^2 &= S(-\lambda_t)
 \end{align}
-with marginals $q(\mathbf{z}_t)$. The joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian:
+where $S$ is the sigmoid function. The joint distribution of latent variables $\mathbf{z}_r,\mathbf{z}_s,\mathbf{z}_t$ at subsequent timesteps $0\le r < s < t \le 1$ is Markovian, and thus:
 \begin{align}
       q(\mathbf{z}_t|\mathbf{z}_s,\mathbf{z}_r)&=q(\mathbf{z}_t|\mathbf{z}_s)=\mathcal{N}\left(\mathbf{z}_t; \alpha_{t|s}\mathbf{z}_s, \sigma_{t|s}^2\mathbf{I}\right)
 \end{align}
-where $\alpha_{t|s}=\alpha_t\alpha_s^{-1}$ and $\sigma_{t|s}^2=\sigma_t^2-\alpha_{t|s}^2\sigma_s^2$. A full derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$ is given in Appendix \ref{appx:diffusion_q_z_t_given_z_s}.
+where $\alpha_{t|s}$ and $\sigma_{t|s}$ are given by:
+\begin{align}
+      \alpha_{t|s} &= \frac{\alpha_t}{\alpha_s}\\
+      \sigma_{t|s}^2 &= \sigma_t^2-\alpha_{t|s}^2\sigma_s^2
+\end{align}
+A full derivation of $q(\mathbf{z}_t|\mathbf{z}_s)$ is given in Appendix \ref{appx:diffusion_q_z_t_given_z_s}. The true distribution $p^*(\mathbf{x})$ plus the conditional joint distribution of the forward model $q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})$ defines the following joint distribution:
+\begin{align}
+      q(\mathbf{z}_0,\ldots,\mathbf{z}_1)=\int p^*(\mathbf{x}) q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x}) d\mathbf{x}
+\end{align}
 
-\subsection{Generative Model}
+\subsection{Reverse-Time Generative Model}
 \label{sec:background_diffusion_reverse}
 
 Anderson \cite{Reverse_Time_Diffusion_Anderson} shows that the forward SDE of Equation \ref{eq:forward_sde} is exactly solved by a second diffusion process, running backwards in time and given by the reverse-time SDE:
 \begin{align}
       d\mathbf{z}_t=\left[\mathbf{f}(\mathbf{z}_t, t)-g(t)^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)\right]dt + g(t)d\bar{\mathbf{w}_t}
 \end{align}
-where $\bar{\mathbf{w}}_t$ is a standard Wiener process when time flows backwards. Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda$-dependent score network \cite{Generative_Modelling_By_Estimating_Gradients_Song} that approximates the score of $q(\mathbf{z}_t)$ such that:
+where $\bar{\mathbf{w}}_t$ is a standard Wiener process when time flows backwards. Let $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ be a $\lambda_t$-dependent score network \cite{Generative_Modelling_By_Estimating_Gradients_Song} that approximates the score of $q(\mathbf{z}_t)$ such that:
 \begin{align}
       \mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\approx \nabla_{\mathbf{z}_t} \log q(\mathbf{z}_t)\label{eq:score_network}
 \end{align}
-If we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$, then the reverse-time SDE is exactly given by:
+Thus, if we have a perfect score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)=\nabla_{\mathbf{z}_t}q(\mathbf{z}_t)$, then the reverse-time SDE is exactly:
 \begin{align}
       d\mathbf{z}_t=\left[\mathbf{f}(\mathbf{z}_t, t)-g(t)^2\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)\right]dt + g(t)d\bar{\mathbf{w}_t}
 \end{align}
@@ -760,7 +761,7 @@ Notably, $\mathcal{L}_\Lambda(\lambda)$ equates to $\mathcal{L}_T(t)$ defined in
 \end{align}
 Similarly, we can reformulate the ELBO for a continuous-time MHVAE given in Equation \ref{eq:elbo_mhvae} to provide the ELBO loss in terms of the log signal-to-noise ratio $\lambda$; it is given per datapoint $\mathbf{x}$ by:
 \begin{align}
-      -\mathrm{ELBO}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_\Lambda(\lambda_{\max})\\
+      -\mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_\Lambda(\lambda_{\max})\\
       &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{\mathcal{L}_\Lambda(\lambda_{\min})}_{\text{Prior Loss}}+\int_{\lambda_{\min}}^{\lambda_{\max}}\mathcal{L}_\Lambda'(\lambda)d\lambda\label{eq:diffusion_elbo}
 \end{align}
 With sufficiently large $\lambda_{\max}$, the reconstruction loss is approximately zero since we can almost perfectly reconstruct $\mathbf{x}$ from $\mathbf{z}_0$---this is particularly true for discrete $\mathbf{x}$. Mathematically, as $\lambda_{\max}\to\infty$, we have:
@@ -783,13 +784,13 @@ In Appendix C of \cite{Understanding_Diffusion_Objective_Kingma}, Kingma and Gao
 
 Most diffusion models in the broader literature---including state-of-the-art models---do not optimise their parameters $\theta$ via minimisation of the ELBO loss. In practice, the various objectives used are all special cases of a \textit{weighted loss} \cite{Understanding_Diffusion_Objective_Kingma}, which is defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}_\Lambda'(\lambda)d\lambda
+      \mathcal{L}_{\mathrm{WL}}&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathcal{L}_\Lambda'(\lambda)d\lambda
 \end{align}
-where $w(\lambda)$ is a weighting function. Substituting the form of $\mathcal{L}'_\Lambda(\lambda)$ given in Equation \ref{eq:time_derivative} yields the following form for the weighted loss:
+where $w(\lambda)$ is a weighting function. Note that, assuming the reconstruction loss is approximately zero, the ELBO loss given in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_{\mathrm{WL}}$ with $w(\lambda) = 1$. Substituting the form of $\mathcal{L}'_\Lambda(\lambda)$ given in Equation \ref{eq:time_derivative} yields the following form for the weighted loss:
 \begin{align}
-      \mathcal{L}_w&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]d\lambda
+      \mathcal{L}_{\mathrm{WL}}&=w(\lambda_{\min})\mathcal{L}_\Lambda(\lambda_{\min})+\frac{1}{2}\int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]d\lambda
 \end{align}
-This form provides several useful insights. Since the first term---the weighted prior loss---contains no learnable parameters, minimisation of the weighted loss $\mathcal{L}_w$ equates to minimisation of the intractable integral. In practice, we minimise the integral via an importance-weighted Monte Carlo integrator:
+This form provides several useful insights. Since the first term---the weighted prior loss---contains no learnable parameters, minimisation of the weighted loss $\mathcal{L}_{\mathrm{WL}}$ equates to minimisation of the intractable integral. In practice, we minimise the integral via an importance-weighted Monte Carlo integrator:
 \begin{align}
       \int_{\lambda_{\min}}^{\lambda_{\max}}w(\lambda)\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)\Vert_2^2\right]d\lambda&=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda)}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\mathbb{E}_{\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\boldsymbol\epsilon - \hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda)\Vert_2^2 \right]\right]\\
       &=\mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})}\left[\frac{w(\lambda)}{p_\Lambda(\lambda)}\Vert \boldsymbol\epsilon-\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda)\Vert_2^2\right]\\
@@ -797,14 +798,14 @@ This form provides several useful insights. Since the first term---the weighted 
 \end{align}
 Notable further analysis by Kingma and Gao \cite{Understanding_Diffusion_Objective_Kingma} shows that the weighted loss also has a likelihood-based interpretation. Simple integration by parts enables us to write the weighted loss as:
 \begin{align}
-      \mathcal{L}_w = w(\lambda_{\max})\mathcal{L}_\Lambda(\lambda_{\max}) + \int_{\lambda_{\min}}^{\lambda_{\max}}-w'(\lambda)\mathcal{L}_\Lambda(\lambda) d\lambda
+      \mathcal{L}_{\mathrm{WL}} = w(\lambda_{\max})\mathcal{L}_\Lambda(\lambda_{\max}) + \int_{\lambda_{\min}}^{\lambda_{\max}}-w'(\lambda)\mathcal{L}_\Lambda(\lambda) d\lambda
 \end{align}
 The likelihood-based interpretation comes from the fact that $\mathcal{L}_\Lambda(\lambda)$ serves as a variational bound on the negative marginal likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$:
 \begin{align}
       \mathcal{L}_\Lambda(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
       &=\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[-\log p(\mathbf{z}_t)\right]+\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[\log q(\mathbf{z}_t|\mathbf{x})\right]
 \end{align}
-As such, minimisation of $\mathcal{L}_\Lambda(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_w$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. 
+As such, minimisation of $\mathcal{L}_\Lambda(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_{\mathrm{WL}}$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. 
 
 Kingma and Gao's \cite{Understanding_Diffusion_Objective_Kingma} analysis directly justifies our use of the $\mathbf{v}$-prediction parameterisation with the truncated continuous-time $\alpha$-cosine noise schedule. In conjunction, their use equates to the weighted loss with:
 \begin{align}
@@ -839,8 +840,6 @@ Figure \ref{fig:v_prediction_weighting} shows the weighting function $w(\lambda)
       \caption{Relationship between the log signal-to-noise ratio $\lambda$ and the functions $w(\lambda)$ and $-w'(\lambda)$ for the $\mathbf{v}$-parameterisation with the same truncated continuous-time $\alpha$-cosine schedule as that in Figure \ref{fig:cosine_lambda_t}. The horizontal axis is the log signal-to-noise level $\lambda$; the vertical axis is the value of $w(\lambda)$ and $-w'(\lambda)$; the vertical axis is logarithmic.}
       \label{fig:v_prediction_weighting}
 \end{figure}
-
-Assuming the reconstruction loss is approximately zero, the ELBO loss given in Equation \ref{eq:diffusion_elbo} is a special case of the weighted loss $\mathcal{L}_w$ with $w(\lambda) = 1$.
 
 \subsection{Imputation for Conditional Generation}
 
@@ -946,7 +945,42 @@ Writing the reconstruction-guidance method as a conditional denoiser $\hat{\math
 \chapter{Results}
 \label{chap:results}
 
+\section{Dataset}
+\label{sec:results_dataset}
+
+\subsection{UKCP18}
+\label{sec:results_dataset_ukcp18}
+
+\subsection{Train and Test Sets}
+\label{sec:results_dataset_train_test}
+
 \section{Importance of the Transformation}
+\label{sec:results_importance_of_transformation}
+
+\subsection{No Transformation}
+\label{sec:results_no_transformation}
+
+One of the primary contributions of this work is a demonstration that the transformation of the input data is critical to the model's performance. To motivate this, we first provide results for a model trained without transforming the input data. Notably, the model produced samples with significant noise at the lower end of the precipitation scale. Figure \ref{fig:no_transform_sample} depicts an example of this. 
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=\linewidth]{no_transform_noisy.png}
+      \caption{Randomly selected sample generated via our model trained with no transformation of the input data. The sample depicts hourly precipitation for the same $563.2\ \mathrm{km} \times 563.2\ \mathrm{km}$ region centred on Birmingham, UK, over ten hours. Each grid cell illustrates the mean precipitation rate, measured in millimetres per hour, for an $8.8 \ \mathrm{km} \times 8.8\ \mathrm{km}$ subarea.}
+      \label{fig:no_transform_sample}
+\end{figure}
+
+\subsection{Square Root Transformation}
+\label{sec:results_no_transformation}
+
+\subsection{Learning a Transformation}
+
+Suppose we transform our input vector $\mathbf{x}$ by some element-wise monotonic transformation:
+\begin{align}
+      \tilde{\mathbf{x}}=\mathbf{f}(\mathbf{x})
+\end{align}
+The change of variables 
+      
+
 
 \section{Temporal Interpolation}
 
