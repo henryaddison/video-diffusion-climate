@@ -308,22 +308,19 @@ We can reformulate the KL divergence of the true distribution $p^*(\mathbf{x})$ 
       &=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
       &=-\mathcal{H}(p^*(\mathbf{x}))+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
-where $\mathcal{H}{(p^*(\mathbf{x}))}$ is the entropy of the true distribution $p^*(\mathbf{x})$ and is constant. As such, minimisation of the KL divergence in this context equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. We can equivalently interpret this as maximisation of the expected log-likelihood:
+where $\mathcal{H}{(p^*(\mathbf{x}))}$ is the entropy of the true distribution $p^*(\mathbf{x})$ and is constant. As such, minimisation of the KL divergence in this context equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$; formally:
 \begin{align}
-      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\argmin_\theta \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
-      &=\argmax_{\theta}\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]
+      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\argmin_\theta \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
 Under the assumption that each of the $N_\mathcal{D}$ samples in our dataset $\mathcal{D}$ are i.i.d. according to $p^*(\mathbf{x})$, we can construct an unbiased estimator:
 \begin{align}
-      \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\simeq \frac{1}{N_{\mathcal{D}}}\log p_\theta(\mathcal{D}) = \frac{1}{N_{\mathcal{D}}} \sum_{\mathbf{x}\in\mathcal{D}} \log p_\theta(\mathbf{x})
+      \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\simeq \frac{1}{N_{\mathcal{D}}}\left(-\log p_\theta(\mathcal{D})\right) = \frac{1}{N_{\mathcal{D}}} \sum_{\mathbf{x}\in\mathcal{D}} \left(-\log p_\theta(\mathbf{x})\right)
 \end{align}
-In other words, under the i.i.d assumption of $\mathcal{D}$, the mean log-likelihood of our model with respect to $\mathcal{D}$ serves as an unbiased estimator of the expected log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. In practice, for computational efficiency reasons---as well as GPU memory limitations---we learn via mini-batches $\mathcal{M}\subset \mathcal{D}$ of size $N_\mathcal{M} < N_\mathcal{D}$, which is itself an unbiased estimator:
+In other words, under the i.i.d assumption of $\mathcal{D}$, the mean negative log-likelihood of our model with respect to $\mathcal{D}$ serves as an unbiased estimator of the expected negative log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. In practice, for computational efficiency reasons---as well as GPU memory limitations---we learn via mini-batches $\mathcal{M}\subset \mathcal{D}$ of size $N_\mathcal{M} < N_\mathcal{D}$, which is itself an unbiased estimator:
 \begin{align}
-      \frac{1}{N_\mathcal{D}}\log p_\theta(\mathcal{D})\simeq \frac{1}{N_\mathcal{M}}\log p_\theta(\mathcal{M})=\frac{1}{N_\mathcal{M}}\sum_{\mathbf{x}\in\mathcal{M}}\log p_\theta(\mathbf{x})
+      \frac{1}{N_\mathcal{D}}\left(-\log p_\theta(\mathcal{D})\right)\simeq \frac{1}{N_\mathcal{M}}\left(-\log p_\theta(\mathcal{M})\right)=\frac{1}{N_\mathcal{M}}\sum_{\mathbf{x}\in\mathcal{M}}\left(-\log p_\theta(\mathbf{x})\right)
 \end{align}
-As such, by transitivity the mean log-likelihood of our model with respect to each mini-batch $\mathcal{M}$ is itself an unbiased estimator of the expected log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$.
-
-We refer to the broad class of generative models trained to maximise the expected log-likelihood of $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$ as \textit{likelihood-based generative models}.
+As such, by transitivity, the mean negative log-likelihood of our model with respect to each mini-batch $\mathcal{M}$ is itself an unbiased estimator of the expected negative log-likelihood of our model with respect to $\mathbf{x}\sim p^*(\mathbf{x})$. We refer to the broad class of generative models trained to minimise the expected negative log-likelihood of $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$ as \textit{likelihood-based generative models}.
 
 \section{Variational Autoencoders}
 \label{sec:background_vae}
@@ -374,13 +371,13 @@ The VAE falls into the broad class of likelihood-based generative models. Howeve
 \end{align}
 does not have an analytic solution or efficient estimator. In addition, we assume the model's posterior density $p_\theta(\mathbf{z}|\mathbf{x})$ is intractable, so we cannot employ the expectation-maximisation algorithm.
 
-Not making these simplifying assumptions is the reason for introducing the inference model $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the model's intractable posterior $p_\theta(\mathbf{z}|\mathbf{x})$. With the introduction of the inference model, we can derive a variational lower bound on the likelihood $p_\theta(\mathbf{x})$:
+Not making these simplifying assumptions is the reason for introducing the inference model $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the model's intractable posterior $p_\theta(\mathbf{z}|\mathbf{x})$. With the introduction of the inference model, we can derive a variational bound on the negative log-likelihood:
 \begin{align}
-      \log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log p_\theta(\mathbf{x})\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q_\phi(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q_\phi(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]+D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))
+      -\log p_\theta(\mathbf{x})&=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q_\phi(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q_\phi(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]-\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]-D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))
       \label{eq:vae_elbo}
       % &\ge \mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
 \end{align}
@@ -388,12 +385,12 @@ The second term in Equation \ref{eq:vae_elbo} is the KL divergence of $q_\phi(\m
 \begin{align}
       D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\ge 0
 \end{align}
-and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the \textit{evidence lower bound objective} (ELBO), denoted $\mathcal{L}_{\mathrm{ELBO}}$, and by the non-negativity of the KL divergence, serves as a lower bound on the log-likelihood of the observed variable $\mathbf{x}$:
+and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the additive inverse of the \textit{evidence lower bound objective} (ELBO); in this work, we will refer to this as the ELBO loss, denoted $\mathcal{L}_{\mathrm{ELBO}}$. By the non-negativity of the KL divergence, it serves as a variational bound on the negative log-likelihood of the observed variable $\mathbf{x}$:
 \begin{align}
-      \log p_\theta(\mathbf{x})&\ge \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
+      -\log p_\theta(\mathbf{x})&\le \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
 \end{align}
-As such, maximisation of the ELBO accomplishes two things. Firstly, it will approximately maximise the log-likelihood of the observed variable $\mathbf{x}$---the overriding goal of a likelihood-based generative model. Secondly, it will minimise the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ from $p_\theta(\mathbf{z}|\mathbf{x})$, thus encouraging the approximate posterior $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ as closely as possible. 
+As such, minimisation of the ELBO loss accomplishes two things. Firstly, it will approximately minimise the negative log-likelihood of the observed variable $\mathbf{x}$---the overriding goal of a likelihood-based generative model. Secondly, it will minimise the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ from $p_\theta(\mathbf{z}|\mathbf{x})$, thus encouraging the approximate posterior $q_\phi(\mathbf{z}|\mathbf{x})$ to approximate the true posterior $p_\theta(\mathbf{z}|\mathbf{x})$ as closely as possible. 
 
 \subsection{Markovian Hierarchical Variational Autoencoders}
 \label{sec:background_vae_hierarchical}
@@ -433,22 +430,22 @@ In the limit of $N_\mathbf{z}\to\infty$, we instead notationally write our laten
 \begin{align}
       \{\mathbf{z}_0,\ldots,\mathbf{z}_1\}=\{\mathbf{z}_t\mid t\in[0,1]\}
 \end{align}
-We can formulate the ELBO for the continuous-time MHVAE as follows:
+We can formulate the ELBO loss for the continuous-time MHVAE as follows:
 \begin{align}
-      p_\theta(\mathbf{x})&\ge \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
-      &=\mathbb{E}_{\mathbf{z}_0,...,\mathbf{z}_1\sim q_\phi(\mathbf{z}_0,...,\mathbf{z}_1|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right) \right]\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
+      -\log p_\theta(\mathbf{x})&\le \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
+      &=\mathbb{E}_{\mathbf{z}_0,\ldots,\mathbf{z}_1\sim q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right) \right]\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
 \end{align}
 Per datapoint $\mathbf{x}$, we define $\mathcal{L}_T(t)$ as the KL divergence of $q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t$ to 1, and its corresponding time derivative $\mathcal{L}_T'(t)$ as:
 \begin{align}
       \mathcal{L}_T(t)&=D_{KL}(q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))\label{eq:dkl_t}\\
       \mathcal{L}_T'(t)&=\frac{d}{dt}\mathcal{L}_T(t)
 \end{align}
-We can substitute this into the ELBO and use the second fundamental theorem of calculus to yield the following form for the ELBO, defined per datapoint $\mathbf{x}$ as:
+We can substitute this into the ELBO loss and use the second fundamental theorem of calculus to yield the following form for the ELBO loss, defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(0)\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]-\mathcal{L}_T(1)+\int_0^1\mathcal{L}'_T(t)\mathrm{d}t \label{eq:elbo_mhvae}
+      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_T(0)\\
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_T(1)-\int_0^1\mathcal{L}'_T(t)\mathrm{d}t \label{eq:elbo_mhvae}
 \end{align}
 This form for the ELBO may seem unconventional. However, we introduce it here to motivate a strong theoretical link between the ELBO and the weighted loss \cite{Understanding_Diffusion_Objective_Kingma}, which is used to train diffusion models in the broader literature. We explore the weighted loss in Section \ref{sec:background_diffusion_weighted_loss}.
 
@@ -749,7 +746,7 @@ From Equation \ref{eq:q_z_t_given_x}, we have $\boldsymbol\mu_{\mathbf{z}_t}=\al
 \subsection{ELBO for Diffusion Models}
 \label{sec:background_diffusion_elbo}
 
-We can interpret the variance-preserving diffusion model used in this work as an MHVAE with several additional restrictions. Firstly, the dimensionality of each latent $\mathbf{z}_t$ equals the dimensionality of the observed variable. Secondly, we have pre-defined $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters. Finally, the marginal distribution of the final latent $q(\mathbf{z}_1)$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds effectively no information about the observed variable $\mathbf{x}$. VAEs and MHVAEs do not typically have these restrictions. Nonetheless, much like VAEs and MHVAEs, we can optimise the generative parameters $\theta$ of diffusion models by maximising the ELBO. As a notable example, Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} optimised the original discrete-time diffusion model via the ELBO. 
+We can interpret the variance-preserving diffusion model used in this work as an MHVAE with several additional restrictions. Firstly, the dimensionality of each latent $\mathbf{z}_t$ equals the dimensionality of the observed variable. Secondly, we have pre-defined $q(\mathbf{z}_t|\mathbf{z}_s)$ where $0\le s<t\le 1$ as a Gaussian diffusion process with no learnable inference parameters. Finally, the marginal distribution of the final latent $q(\mathbf{z}_1)$ is approximately the multivariate standard Gaussian $\mathcal{N}(\mathbf{0}, \mathbf{I})$, and thus holds effectively no information about the observed variable $\mathbf{x}$. VAEs and MHVAEs do not typically have these restrictions. Nonetheless, much like VAEs and MHVAEs, we can optimise the generative parameters $\theta$ of diffusion models by minimising the ELBO loss. As a notable example, Sohl-Dickstein et al. \cite{Deep_Unsupervised_Learning_Sohl-Dickstein} optimised the original discrete-time diffusion model via the ELBO loss. 
 
 For a given datapoint $\mathbf{x}$, we define $\mathcal{L}_\Lambda(\lambda)$ as the KL divergence of $q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t=f_\Lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$:
 \begin{align}
@@ -759,9 +756,9 @@ Notably, $\mathcal{L}_\Lambda(\lambda)$ equates to $\mathcal{L}_T(t)$ defined in
 \begin{align}
       \mathcal{L}_\Lambda(\lambda)=\mathcal{L}_T(t=f_\Lambda^{-1}(\lambda))
 \end{align}
-Similarly, we can reformulate the ELBO for a continuous-time MHVAE given in Equation \ref{eq:elbo_mhvae} to provide the ELBO loss in terms of the log signal-to-noise ratio $\lambda$; it is given per datapoint $\mathbf{x}$ by:
+Similarly, we can reformulate the ELBO loss for a continuous-time MHVAE given in Equation \ref{eq:elbo_mhvae} to provide the ELBO loss in terms of the log signal-to-noise ratio $\lambda$; it is given per datapoint $\mathbf{x}$ by:
 \begin{align}
-      -\mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_\Lambda(\lambda_{\max})\\
+      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_\Lambda(\lambda_{\max})\\
       &=\underbrace{\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]}_{\text{Reconstruction Loss}}+\underbrace{\mathcal{L}_\Lambda(\lambda_{\min})}_{\text{Prior Loss}}+\int_{\lambda_{\min}}^{\lambda_{\max}}\mathcal{L}_\Lambda'(\lambda)d\lambda\label{eq:diffusion_elbo}
 \end{align}
 With sufficiently large $\lambda_{\max}$, the reconstruction loss is approximately zero since we can almost perfectly reconstruct $\mathbf{x}$ from $\mathbf{z}_0$---this is particularly true for discrete $\mathbf{x}$. Mathematically, as $\lambda_{\max}\to\infty$, we have:
@@ -954,6 +951,8 @@ Writing the reconstruction-guidance method as a conditional denoiser $\hat{\math
 \subsection{Train and Test Sets}
 \label{sec:results_dataset_train_test}
 
+We scale each input data element to the range $[-1,1]$ to ensure that our neural network operates on consistently scaled inputs during the reverse-time generative process, starting from the multivariate standard Gaussian prior.
+
 \section{Importance of the Transformation}
 \label{sec:results_importance_of_transformation}
 
@@ -970,17 +969,80 @@ One of the primary contributions of this work is a demonstration that the transf
 \end{figure}
 
 \subsection{Square Root Transformation}
-\label{sec:results_no_transformation}
 
-\subsection{Learning a Transformation}
+\subsection{Change of Variable Rule}
+\label{sec:results_change_of_variable}
 
-Suppose we transform our input vector $\mathbf{x}$ by some element-wise monotonic transformation:
+Suppose we transform our observed variable $\mathbf{x}$ via an element-wise monotonically-increasing vector-valued function $\mathbf{h}:[0, \mathrm{P}_{\max}]^D\to[-1,1]^D$, such that:
 \begin{align}
-      \tilde{\mathbf{x}}=\mathbf{f}(\mathbf{x})
+      \mathbf{h}(\mathbf{x})=
+      \begin{bmatrix}
+            h(x_1) \\
+            h(x_2) \\
+            \vdots \\
+            h(x_D)
+      \end{bmatrix}
 \end{align}
-The change of variables 
-      
+where we select $\mathrm{P}_{\max}$ as the maximum precipitation rate observed in the training set. In other words, our vector-valued function $\mathbf{h}$ applies an identical transformation $h:[0, \mathrm{P}_{\max}]\to[-1,1]$ to each element $x_i$ of $\mathbf{x}$. The change of variable rule states that:
+\begin{align}
+      p_\theta(\mathbf{x}) = \tilde{p}_\theta(\mathbf{h}(\mathbf{x}))\left|\det\left(\frac{d \mathbf{h}(\mathbf{x})}{d \mathbf{x}}\right)\right|
+\end{align}
+where $\det$ is the determinant operator, and $d\mathbf{h}(\mathbf{x})/d\mathbf{x}$ is the Jacobian of transformation $\mathbf{h}$. Since $\mathbf{h}$ is an element-wise transformation, the Jacobian matrix is diagonal:
+\begin{align}
+      \frac{d\mathbf{h}(\mathbf{x})}{d\mathbf{x}} =
+      \begin{bmatrix}
+            \frac{\partial \tilde{x}_1}{\partial x_1} & 0 & \cdots & 0 \\
+            0 & \frac{\partial \tilde{x}_2}{\partial x_2} & \cdots & 0 \\
+            \vdots & \vdots & \ddots & \vdots \\
+            0 & 0 & \cdots & \frac{\partial \tilde{x}_D}{\partial x_D}
+      \end{bmatrix}
+\end{align}
+The determinant of a diagonal matrix is simply the product of its diagonal elements; thus, we can write:
+\begin{align}
+      \det\left(\frac{d\mathbf{h}(\mathbf{x})}{d\mathbf{x}}\right) = \prod_{i=1}^D \frac{\partial h(x_i)}{\partial x_i}.
+\end{align}
+Therefore, we can rewrite the change of variables rule under transformation $\mathbf{h}$ in the following simplified form:
+\begin{align}
+      p_\theta(\mathbf{x}) = \tilde{p}_\theta(\mathbf{h}(\mathbf{x}))\prod_{i=1}^D \frac{\partial h(x_i)}{\partial x_i}
+\end{align}
+We can thus formulate the negative log-likelihood of $\mathbf{x}$ as follows:
+\begin{align}
+      -\log p_\theta(\mathbf{x}) &= -\log \left(\tilde{p}_\theta(\mathbf{h}(\mathbf{x}))\prod_{i=1}^D\frac{\partial h(x_i)}{\partial x_i}\right)\\
+      &= -\log \tilde{p}_\theta(\mathbf{h}(\mathbf{x})) - \log\left(\prod_{i=1}^D\frac{\partial h(x_i)}{\partial x_i}\right)\\
+      &= -\log \tilde{p}_\theta(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h(x_i)}{\partial x_i}\right)\label{eq:minus_log_in_terms_of_minus_log_transform}
+\end{align}
 
+\subsection{ELBO Loss with a Change of Variable}
+\label{sec:results_elbo_change_of_variable}
+
+The ELBO loss for a transformed datapoint $\mathbf{h}(\mathbf{x})$, denoted $\tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}(\mathbf{x}))$, serves as a variational bound on the negative log-likelihood of $\mathbf{h}(\mathbf{x})$ and is given by:
+\begin{align}
+      -\log \tilde{p}_\theta(\mathbf{h}(\mathbf{x}))\le \tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}(\mathbf{x})) = \mathbb{E}_{\mathbf{z}_0,\ldots,\mathbf{z}_1\sim\tilde{q}(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{h}(\mathbf{x}))} \left[\log \frac{\tilde{p}_\theta(\mathbf{z}_0,\ldots,\mathbf{z}_1,\mathbf{h}(\mathbf{x}))}{\tilde{q}(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{h}(\mathbf{x}))}\right]
+\end{align}
+Plugging the inequality into Equation \ref{eq:minus_log_in_terms_of_minus_log_transform}, we obtain:
+\begin{align}
+      -\log p_\theta(\mathbf{x})\le \tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h(x_i)}{\partial x_i}\right)\label{eq:optimal_elbo_no_parameters}
+\end{align}
+Thus, if we were to parameterise the transformation $\mathbf{h}_\omega$, with transformative parameters $\omega$, we would theoretically be able to learn some optimal transformation to approximately minimise the negative log-likelihood of the observed variable $\mathbf{x}$. For completeness, the loss with transformative parameters $\omega$ yields only a minor modification to Equation \ref{eq:optimal_elbo_no_parameters} and is given by:
+\begin{align}
+      p_\theta(\mathbf{x}) \le \tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)\label{eq:optimal_elbo_parameters}
+\end{align}
+However, as detailed in Section \ref{sec:background_diffusion_weighted_loss}, optimising our generative parameters $\theta$ via the ELBO loss yields suboptimal results. Diffusion models in the broader literature have achieved far superior results via optimisation with the weighted loss $\mathcal{L}_{\mathrm{WL}}$.
+
+\subsection{Weighted Loss with a Change of Variable}
+
+The $\lambda$-dependent weighting function $w(\lambda)$ in the weighted loss $\mathcal{L}_{\mathrm{WL}}$ causes it to lose a direct theoretical relationship with the negative log-likelihood of the observed variable $\mathbf{x}$. Thus, we cannot directly apply the change of variable approach to the weighted loss as we did for the ELBO loss. However, we can consider the individual contribution of the negative log-determinant term in the loss given in Equation \ref{eq:optimal_elbo_parameters} to derive an empirically good loss function for our diffusion model that jointly optimises the generative parameters $\theta$ and the transformative parameters $\omega$. Importantly, since we constrain the output range of $h_\omega$ to be $[-1,1]$, the neural network cannot infinitely extend the output range. As such, it has to learn some optimal monotonically increasing function to minimise:
+\begin{align}
+      -\sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)
+\end{align}
+Intuitively, since the $\log$ function itself is monotonically increasing, the negative log-determinant term will encourage a steeper gradient for areas of the input space $[0, \mathrm{P}_{\max}]$ wherein individual elements $x_i$ occur most often. Conversely, the term will individually encourage a shallower gradient for areas of the input space $[0, \mathrm{P}_{\max}]$ wherein individual elements $x_i$ occur least often.
+
+Using this intuition, we hypothesised that we could add the negative log-determinant term to the weighted loss $\mathcal{L}_{\mathrm{WL}}$ to jointly optimise the generative parameters $\theta$ and the transformative parameters $\omega$ to achieve higher-quality samples. We denote the weighted loss with a change of variables as $\mathcal{L}_{\mathrm{WLCOV}}$, and it is given by:
+\begin{align}
+      \mathcal{L}_{\mathrm{WLCOV}}(\mathbf{x}) = \mathcal{L}_{\mathrm{WL}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)
+\end{align}
+
+While this approach arguably lacks solid theoretical justification, we found that, in practice, it yielded promising results.
 
 \section{Temporal Interpolation}
 

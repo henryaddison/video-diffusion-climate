@@ -612,15 +612,15 @@ class GaussianDiffusion(nn.Module):
             grad = torch.autograd.grad(outputs = error, inputs = z_t_b)[0]
             x_hat[:, :, indices_b] -= ((self.omega_r * alpha_t) / 2) * grad
 
-        x_hat = x_hat.clamp(-1, 1)
+        # x_hat = x_hat.clamp(-1, 1)
         mu_st, sigma_st = self.q_posterior(z_t, x_hat, lambda_s, lambda_t)
         return mu_st, sigma_st
 
-    def p_sample(self, z_t, lambda_s, lambda_t, is_final_step, x_a = None, indices_a = None):
+    def p_sample(self, z_t, lambda_s, lambda_t, x_a = None, indices_a = None):
         mu_st, sigma_st = self.p_mean_variance(z_t, lambda_s, lambda_t, x_a = x_a, indices_a = indices_a)
         noise = torch.randn_like(z_t)
         
-        return mu_st + sigma_st * noise * (1 - is_final_step)
+        return mu_st + sigma_st * noise
 
     def p_sample_loop(self, shape):
         z_t = torch.randn(shape).cuda()
@@ -631,7 +631,7 @@ class GaussianDiffusion(nn.Module):
             t = torch.full((b,), i / self.num_timesteps).cuda()
             lambda_s = self.log_snr_schedule_cosine(s)
             lambda_t = self.log_snr_schedule_cosine(t)
-            z_t = self.p_sample(z_t, lambda_s, lambda_t, is_final_step = i == 1)
+            z_t = self.p_sample(z_t, lambda_s, lambda_t)
 
         x = z_t.clamp_(-1, 1)
 
