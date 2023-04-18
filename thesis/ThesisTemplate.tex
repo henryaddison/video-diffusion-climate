@@ -939,7 +939,7 @@ Writing the reconstruction-guidance method as a conditional denoiser $\hat{\math
 
 % -----------------------------------------------------------------------------
 
-\chapter{Results}
+\chapter{Experiments and Results}
 \label{chap:results}
 
 \section{Dataset}
@@ -959,7 +959,7 @@ We scale each input data element to the range $[-1,1]$ to ensure that our neural
 \subsection{No Transformation}
 \label{sec:results_no_transformation}
 
-One of the primary contributions of this work is a demonstration that the transformation of the input data is critical to the model's performance. To motivate this, we first provide results for a model trained without transforming the input data. Notably, the model produced samples with significant noise at the lower end of the precipitation scale. Figure \ref{fig:no_transform_sample} depicts an example of this. 
+One of the primary contributions of this work is a demonstration that a transformation of the input data is critical to the model's performance. To motivate this, we first provide results for a model trained without transforming the input data. Notably, the model produced samples with significant perceptible noise at the lower end of the precipitation scale. Figure \ref{fig:no_transform_sample} depicts an example of this. While the sample is temporally coherent, the noise is abundantly visible and detrimental to the quality of the sample.
 
 \begin{figure}[htbp]
       \centering
@@ -968,12 +968,52 @@ One of the primary contributions of this work is a demonstration that the transf
       \label{fig:no_transform_sample}
 \end{figure}
 
+To motivate this beyond a single example, Figure \ref{fig:no_transform_histogram_low} depicts the distribution of precipitation rates of our generated samples compared to those in our test set at the lower end of the scale (i.e. less than 0.5 millimetres per hour) where the noise is most perceptible. As can be seen, below approximately 0.2 millimetres per hour, the distribution of precipitation rates in our generated samples significantly deviates from that of the test set. For example, our generated samples contain precipitation rates of 0.1 millimetres per hour ten times more frequently than the test set. While 0.1 millimetres per hour equates to only very light drizzle, it is still a non-negligible amount of precipitation. The fact that the discrepancy is so large at this scale likely means that using the generated samples in any real-world context would present significant challenges.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.75\linewidth]{no_transform_histogram_low.png}
+      \caption{Distribution of precipitation rates below 0.5 millimetres per hour in samples generated via our model trained with no transformation compared to the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically.}
+      \label{fig:no_transform_histogram_low}
+\end{figure}
+
+We can attribute much of this deviation to random noise visible in the generated samples. We cannot determine the precise source of this noise, but we speculate it may be a combination of multiple factors. The first contributing factor is likely that our score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ is not perfect; in other words, there likely exists $\mathbf{z}_t$ and $\lambda_t$ such that $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ does not serve as a good approximation for $\nabla_{\mathbf{z}_t}  \log q(\mathbf{z}_t)$. In addition, since we can only approximate the reverse-time SDE, the discretised numerical solver likely introduces errors itself---this would be the case even if we had a perfect score model. We experimented with predictor-corrector sampling \cite{Score_Based_Song} to rectify this but observed no improvement in the quality of our generated samples. We speculate that the errors introduced by these two factors likely manifest as the noise in our generated samples.
+
+Noise of this magnitude creates unique challenges for diffusion models generating precipitation data---challenges that do not present as significant an issue in the more common domain of image generation. There are two primary reasons for this. First and foremost, the distribution of precipitation rates in our data is far more skewed than the distribution of colours in image data. This skew is evident in Figure \ref{fig:ukcp18_test_histogram}, which depicts the full distribution of precipitation rates in our test set. 80\% of the precipitation rates are less than 0.003 millimetres per hour; to put this into perspective, the highest precipitation rate in our test set is approximately 60 millimetres per hour. As a direct result of this extreme distribution, even relatively small amounts of noise at the lower end of the scale can significantly impact the quality of the generated samples.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.75\linewidth]{ukcp18_test_histogram.png}
+      \caption{Distribution of precipitation rates in the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically.} 
+      \label{fig:ukcp18_test_histogram}
+\end{figure}
+
+The second challenge that generating precipitation data presents in contrast to image data is that precipitation is a continuous variable. In contrast, discrete values comprise each colour channel in an image. Thus, a final discretisation step at the end of the generative process for images eliminates much of the noise. We cannot take advantage of this approach for precipitation data. In the context of Figure \ref{fig:no_transform_sample} wherein the noise is most perceptible below the 0.2 millimetres per hour threshold, this constitutes less than 0.2\% of our output space. If this were an image with 256 discrete values per colour channel, this relative amount of noise represents less than a single discrete value. Thus, a final discretisation step would eliminate the noise almost entirely.
+
+One final unnatural characteristic exhibited by a small proportion of the samples generated via our model trained with no transformation of the input data is an unnatural global shift in precipitation rates. Visually, this effect manifests as a consistent blue colour. Specifically, the samples in question exhibit a low precipitation rate in the region of 0.1--0.5 millimetres per hour across the entire sample, which represents a low drizzle rate across the entire 563.2\ \text{km} $\times$ 563.2\ \text{km} region for the entire ten hours. Figure \ref{fig:no_transform_global_shift} depicts one such sample. Even in isolation, this would be an unnatural scenario and thus should certainly not occur at the frequency we observed in the samples we generated. We could not identify a single example in the test set that exhibited this characteristic.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=\linewidth]{no_transform_global_shift.png}
+      \caption{Sample generated via our model trained with no transformation of the input data that exhibits an unnatural global shift in precipitation rates. The format is the same as Figure \ref{fig:no_transform_sample}.}
+      \label{fig:no_transform_global_shift}
+\end{figure}
+
 \subsection{Square Root Transformation}
+
+Empirically, we found that performing a square root transformation to the input data significantly improved the quality of the samples generated by our model. Most notably, it significantly reduced the amount of noise at the lower end of the precipitation scale.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.75\linewidth]{no_transform_vs_sqrt_histogram_low.png}
+      \caption{Distribution of precipitation rates below 0.5 millimetres per hour in samples generated via our model trained with the square root transformation compared to both samples generated via our model trained with no transformation and the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically.}
+      \label{fig:no_transform_vs_sqrt_histogram_low}
+\end{figure}
 
 \subsection{Change of Variable Rule}
 \label{sec:results_change_of_variable}
 
-Suppose we transform our observed variable $\mathbf{x}$ via an element-wise monotonically-increasing vector-valued function $\mathbf{h}:[0, \mathrm{P}_{\max}]^D\to[-1,1]^D$, such that:
+Suppose we transform our observed variable $\mathbf{x}$ via an element-wise monotonically-increasing vector-valued function $\mathbf{h}:[-1, 1]^D\to[-1,1]^D$, such that:
 \begin{align}
       \mathbf{h}(\mathbf{x})=
       \begin{bmatrix}
@@ -983,7 +1023,7 @@ Suppose we transform our observed variable $\mathbf{x}$ via an element-wise mono
             h(x_D)
       \end{bmatrix}
 \end{align}
-where we select $\mathrm{P}_{\max}$ as the maximum precipitation rate observed in the training set. In other words, our vector-valued function $\mathbf{h}$ applies an identical transformation $h:[0, \mathrm{P}_{\max}]\to[-1,1]$ to each element $x_i$ of $\mathbf{x}$. The change of variable rule states that:
+where we select $\mathrm{P}_{\max}$ as the maximum precipitation rate observed in the training set. In other words, our vector-valued function $\mathbf{h}$ applies an identical transformation $h:[-1, 1]\to[-1,1]$ to each element $x_i$ of $\mathbf{x}$. The change of variable rule states that:
 \begin{align}
       p_\theta(\mathbf{x}) = \tilde{p}_\theta(\mathbf{h}(\mathbf{x}))\left|\det\left(\frac{d \mathbf{h}(\mathbf{x})}{d \mathbf{x}}\right)\right|
 \end{align}
@@ -1035,14 +1075,18 @@ The $\lambda$-dependent weighting function $w(\lambda)$ in the weighted loss $\m
 \begin{align}
       -\sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)
 \end{align}
-Intuitively, since the $\log$ function itself is monotonically increasing, the negative log-determinant term will encourage a steeper gradient for areas of the input space $[0, \mathrm{P}_{\max}]$ wherein individual elements $x_i$ occur most often. Conversely, the term will individually encourage a shallower gradient for areas of the input space $[0, \mathrm{P}_{\max}]$ wherein individual elements $x_i$ occur least often.
+Intuitively, since the $\log$ function itself is monotonically increasing, the negative log-determinant term will encourage a steeper gradient for areas of the input space $[-1, 1]$ wherein individual elements $x_i$ occur most often. Conversely, the term will individually encourage a shallower gradient for areas of the input space $[-1, 1]$ wherein individual elements $x_i$ occur least often.
 
 Using this intuition, we hypothesised that we could add the negative log-determinant term to the weighted loss $\mathcal{L}_{\mathrm{WL}}$ to jointly optimise the generative parameters $\theta$ and the transformative parameters $\omega$ to achieve higher-quality samples. We denote the weighted loss with a change of variables as $\mathcal{L}_{\mathrm{WLCOV}}$, and it is given by:
 \begin{align}
-      \mathcal{L}_{\mathrm{WLCOV}}(\mathbf{x}) = \mathcal{L}_{\mathrm{WL}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)
+      \mathcal{L}_{\mathrm{WLCOV}}(\mathbf{x}) = \tilde{\mathcal{L}}_{\mathrm{WL}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)
 \end{align}
 
 While this approach arguably lacks solid theoretical justification, we found that, in practice, it yielded promising results.
+
+\subsection{Monotonic Neural Network}
+
+\textbf{THE WEIGHTED LOSS IS DEFINED INCORRECTLY. WE NEED TO DEFINE THE TILDE LWL PROPERLY}
 
 \section{Temporal Interpolation}
 

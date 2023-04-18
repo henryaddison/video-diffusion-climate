@@ -58,4 +58,4 @@ for batch_size in batch_sizes:
     new_samples=diffusion.sample(batch_size = batch_size)
     new_samples = inverse_tensor(new_samples).cuda()
     samples=torch.cat((samples, new_samples), dim = 0)
-    torch.save(samples, f"/user/home/cj19328/samples.pt")
+    torch.save(samples, f"/user/home/cj19328/samples_transform_0.1.pt")
