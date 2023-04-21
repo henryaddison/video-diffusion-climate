@@ -944,6 +944,8 @@ Writing the reconstruction-guidance method as a conditional denoiser $\hat{\math
 \subsection{UKCP18}
 \label{sec:results_dataset_ukcp18}
 
+United Kingdom Climate Projections 2018 (UKCP18) \cite{MO_UKCP18_Dataset} is the UK Met Office's latest generation of national climate projections. UKCP18 contains simulations for various components of the climate under several Representative Concentration Pathways (RCPs), which are trajectories for greenhouse gas concentration adopted by the Intergovernmental Panel on Climate Change. For example, RCP8.5 represents a scenario whereby greenhouse gas emissions continue to grow unmitigated \cite{MO_RCP_Guidance}.
+
 \subsection{Train and Test Sets}
 \label{sec:results_dataset_train_test}
 
@@ -955,58 +957,132 @@ We scale each input data element to the range $[-1,1]$ to ensure that our neural
 \subsection{No Transformation}
 \label{sec:results_no_transformation}
 
-One of the primary contributions of this work is a demonstration that a transformation of the input data is critical to the model's performance. To motivate this, we first provide results for a model trained without transforming the input data. Notably, the model produced samples with significant perceptible noise at the lower end of the precipitation scale. Figure \ref{fig:no_transform_sample} depicts an example of this. While the sample is temporally coherent, the noise is abundantly visible and detrimental to the quality of the sample.
+One of the primary contributions of this work is demonstrating that a transformation of the input data is critical to the model's performance. To motivate this, we first provide results for a model trained without transforming the input data. Notably, the model produced samples with two significant, related issues. Namely, the generated samples all contain significant perceptible noise at the lower end of the precipitation scale, and many exhibit a baseline shift in precipitation rates. Figure \ref{fig:no_transform_sample} depicts an example of the former, while Figure \ref{fig:no_transform_global_shift} depicts an example of the latter. Generated samples with the aforementioned baseline shift exhibit a modal precipitation rate significantly higher than samples observed in the test set. Visually, this manifests as a consistent blue colour across the entire sample in regions without more intense precipitation, indicating at least a  trace quantity of precipitation across the entire 563.2\ \text{km} $\times$ 563.2\ \text{km} region for the entire ten hours. Even in isolation, this would be an unnatural scenario and thus should certainly not occur at the frequency we observed in the samples generated via our model.
 
 \begin{figure}[htbp]
       \centering
-      \includegraphics[width=\linewidth]{no_transform_noisy.png}
-      \caption{Randomly selected sample generated via our model trained with no transformation of the input data. The sample depicts hourly precipitation for the same $563.2\ \mathrm{km} \times 563.2\ \mathrm{km}$ region centred on Birmingham, UK, over ten hours. Each grid cell illustrates the mean precipitation rate, measured in millimetres per hour, for an $8.8 \ \mathrm{km} \times 8.8\ \mathrm{km}$ subarea.}
-      \label{fig:no_transform_sample}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_noisy.png}
+            \caption{Noise at the lower end of the precipitation scale}
+            \label{fig:no_transform_sample}
+      \end{subfigure}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_global_shift.png}
+            \caption{Baseline shift in precipitation rate}
+            \label{fig:no_transform_global_shift}
+      \end{subfigure}
+      \caption{Two samples generated via our model trained with no transformation of the input data. The sample depicts hourly precipitation for the same $563.2\ \mathrm{km} \times 563.2\ \mathrm{km}$ region centred on Birmingham, UK, over ten hours. Each grid cell illustrates the mean precipitation rate, measured in millimetres per hour, for an $8.8 \ \mathrm{km} \times 8.8\ \mathrm{km}$ subarea. The top sample exhibits significant noise at the lower end of the precipitation scale, while the bottom sample exhibits a baseline shift in precipitation rate.}
 \end{figure}
 
-To motivate this beyond a single example, Figure \ref{fig:no_transform_histogram_low} depicts the distribution of precipitation rates of our generated samples compared to those in our test set at the lower end of the scale (i.e. less than 0.5 millimetres per hour) where the noise is most perceptible. As can be seen, below approximately 0.2 millimetres per hour, the distribution of precipitation rates in our generated samples significantly deviates from that of the test set. For example, our generated samples contain precipitation rates of 0.1 millimetres per hour ten times more frequently than the test set. While 0.1 millimetres per hour equates to only very light drizzle, it is still a non-negligible amount of precipitation. The fact that the discrepancy is so large at this scale likely means that using the generated samples in any real-world context would present significant challenges.
+To motivate these phenomena beyond individual examples, Figure \ref{fig:no_transform_histogram_low} depicts the distribution of precipitation rates of our generated samples compared to those in our test set at the lower end of the scale (i.e. less than 0.3 millimetres per hour) where the noise is most perceptible. As can be seen, below approximately 0.2 millimetres per hour, the distribution of precipitation rates in our generated samples significantly deviates from that of the test set. For example, our generated samples contain a rate of 0.1 millimetres per hour approximately ten times more frequently than the test set. While precipitation of this scale equates only to trace amounts, it is still non-negligible. Thus, using the generated samples in any real-world context, such as for hydrological studies, would present significant challenges.
 
 \begin{figure}[htbp]
       \centering
-      \includegraphics[width=.75\linewidth]{no_transform_histogram_low.png}
-      \caption{Distribution of precipitation rates below 0.5 millimetres per hour in samples generated via our model trained with no transformation compared to the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically.}
-      \label{fig:no_transform_histogram_low}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_histogram_low.png}
+            \caption{Below 0.3 millimetres per hour}
+            \label{fig:no_transform_histogram_low}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_histogram.png}
+            \caption{Full distribution}
+            \label{fig:no_transform_histogram_high}
+      \end{subfigure}
+      \caption{Distribution of precipitation rates in samples generated via our model trained with no transformation compared to the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically. The left plot depicts the distribution of precipitation rates below 0.3 millimetres per hour, while the right plot depicts the full distribution.}
+      \label{fig:no_transform_histogram}
 \end{figure}
 
-We can attribute much of this deviation to random noise visible in the generated samples. We cannot determine the precise source of this noise, but we speculate it may be a combination of multiple factors. The first contributing factor is likely that our score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ is not perfect; in other words, there likely exists $\mathbf{z}_t$ and $\lambda_t$ such that $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ does not serve as a good approximation for $\nabla_{\mathbf{z}_t}  \log q(\mathbf{z}_t)$. In addition, since we can only approximate the reverse-time SDE, the discretised numerical solver likely introduces errors itself---this would be the case even if we had a perfect score model. We experimented with predictor-corrector sampling \cite{Score_Based_Song} to rectify this but observed no improvement in the quality of our generated samples. We speculate that the errors introduced by these two factors likely manifest as the noise in our generated samples.
+We can attribute much of this deviation to random noise visible in the generated samples. We cannot determine the precise source of this noise, but we speculate it may be a combination of multiple factors. The first contributing factor is likely that our score model $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ is not perfect; in other words, there likely exists $\mathbf{z}_t$ such that $\mathbf{s}_\theta(\mathbf{z}_t, \lambda_t)$ does not serve as a good approximation for the true score $\nabla_{\mathbf{z}_t}  \log q(\mathbf{z}_t)$. In addition, since we can only approximate the reverse-time SDE, the discretised numerical solver likely introduces errors itself---this would be the case even if we had a perfect score model. We speculate that the errors introduced by these two factors likely manifest as the noise at the lower end of the precipitation scale and the baseline shift in precipitation rate. We experimented with predictor-corrector sampling \cite{Score_Based_Song} to rectify this but observed no improvement in the quality of our generated samples.
 
-Noise of this magnitude creates unique challenges for diffusion models generating precipitation data---challenges that do not present as significant an issue in the more common domain of image generation. There are two primary reasons for this. First and foremost, the distribution of precipitation rates in our data is far more skewed than the distribution of colours in image data. This skew is evident in Figure \ref{fig:ukcp18_test_histogram}, which depicts the full distribution of precipitation rates in our test set. 80\% of the precipitation rates are less than 0.003 millimetres per hour; to put this into perspective, the highest precipitation rate in our test set is approximately 60 millimetres per hour. As a direct result of this extreme distribution, even relatively small amounts of noise at the lower end of the scale can significantly impact the quality of the generated samples.
+Noise of the observed magnitude creates unique challenges for diffusion models generating precipitation data---challenges that do not present as significant an issue in the more common domain of image generation. There are two primary reasons for this. First and foremost, the distribution of precipitation rates in our data is far more skewed than the distribution of colours in image data. This skew is evident in Figure \ref{fig:no_transform_histogram_high}, which contains the full distribution of precipitation rates in our test set from UKCP18. 80\% of the cells in the test set are of a precipitation rate lower than 0.003 millimetres per hour; to put this into perspective, the highest precipitation rate in our test set is approximately 60 millimetres per hour. As a direct result of this extreme distribution, even relatively small amounts of noise at the lower end of the scale or minute inaccuracies in the reverse-time generative model can significantly impact the quality of the generated samples. The second challenge that generating precipitation data presents in contrast to image data is that precipitation is a continuous variable, in contrast to the discrete values that comprise each colour channel in an image. Thus, a final discretisation step at the end of the generative process for images eliminates much of the noise. We cannot take advantage of this approach for precipitation data. In the context of Figure \ref{fig:no_transform_sample} wherein the significant deviation from the true distribution is evident below the 0.2 millimetres per hour threshold, this constitutes approximately 0.2\% of our output space. If this were an image with 256 discrete values per colour channel, this relative amount of the output space represents less than a single discrete value. Thus, a final discretisation step would eliminate the problem almost entirely.
+
+To assess the degree to which our model's samples correctly capture the structure and characteristics of samples from the true distribution, we use power spectral density (PSD) graphs, which visually represent the distribution of a signal's power across a range of frequencies. The interpretation of a PSD differs depending on the nature of the signal. In the case of an image, a PSD graph provides information on the distribution of spatial frequencies present. It thus informs whether a given image is dominated more by fine details and sharp edges or by smooth variations in intensity. In the case of time-series data, a PSD graph provides information on the distribution of frequencies present in the signal over time. In the context of our precipitation data, individual one-hour snapshots for the entire $563.2\ \mathrm{km}\times 563.2\ \mathrm{km}$ region are analogous to images, while hourly snapshots for a single $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ subarea serve as time-series data. Greater power at higher spatial frequencies reveals sharp boundaries between areas with and without precipitation, indicating the presence of localised showers; greater power at lower spatial frequencies points to smooth variations in precipitation intensity, suggesting a sizeable frontal system. Greater power at higher temporal frequencies indicates rapid fluctuations in precipitation, indicating the presence of brief precipitation events, such as convective showers; greater power at lower temporal frequencies suggests more stable events, such as a continuous dry spell. From Figure \ref{fig:no_transform_psd}, it is evident that the samples in the test set contain more power at both lower spatial and temporal frequencies than at higher temporal and spatial frequencies, on average. The samples generated via our model trained with no transformation follow a similar trend in both cases, as indicated by the similar shapes of the PSD graphs. We can interpret this as the model having broadly learnt the true distribution's underlying spatial and temporal structure. However, the samples generated via our model contain less power than those in the test set at all scales. 
 
 \begin{figure}[htbp]
       \centering
-      \includegraphics[width=.75\linewidth]{ukcp18_test_histogram.png}
-      \caption{Distribution of precipitation rates in the test set from UKCP18. The horizontal axis is the precipitation rate, measured in millimetres per hour; the vertical axis is frequency density. The vertical axis is scaled logarithmically.} 
-      \label{fig:ukcp18_test_histogram}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_psd_spatial.png}
+            \caption{Spatial Dimensions}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_psd_temporal.png}
+            \caption{Temporal Dimension}
+      \end{subfigure}
+      \caption{Power spectral density (PSD) graphs for samples generated via our model trained with no transformation, and the test set from UKCP18. The horizontal axis is the number of waves, denoted $k$; the vertical axis is the mean power across all samples for a given $k$, denoted $P(k)$. Both axes are logarithmic. The left plot is a PSD graph for two spatial dimensions, and the right plot is a PSD graph for the temporal dimension.}
+      \label{fig:no_transform_psd}
 \end{figure}
 
-The second challenge that generating precipitation data presents in contrast to image data is that precipitation is a continuous variable. In contrast, discrete values comprise each colour channel in an image. Thus, a final discretisation step at the end of the generative process for images eliminates much of the noise. We cannot take advantage of this approach for precipitation data. In the context of Figure \ref{fig:no_transform_sample} wherein the noise is most perceptible below the 0.2 millimetres per hour threshold, this constitutes less than 0.2\% of our output space. If this were an image with 256 discrete values per colour channel, this relative amount of noise represents less than a single discrete value. Thus, a final discretisation step would eliminate the noise almost entirely.
-
-One final unnatural characteristic exhibited by a small proportion of the samples generated via our model trained with no transformation of the input data is an unnatural global shift in precipitation rates. Visually, this effect manifests as a consistent blue colour. Specifically, the samples in question exhibit a low precipitation rate in the region of 0.1--0.5 millimetres per hour across the entire sample, which represents a low drizzle rate across the entire 563.2\ \text{km} $\times$ 563.2\ \text{km} region for the entire ten hours. Figure \ref{fig:no_transform_global_shift} depicts one such sample. Even in isolation, this would be an unnatural scenario and thus should certainly not occur at the frequency we observed in the samples we generated. We could not identify a single example in the test set that exhibited this characteristic.
+As evident from Figure \ref{fig:no_transform_histogram_high}, the distribution of individual cells' values in the samples generated via our model broadly resembles that of our test set from UKCP18. However, the generated samples undeniably underrepresent precipitation events at most intensity levels, particularly those at the extreme end of the scale, as most evident from the quantile-quantile plots in Figure \ref{fig:no_transform_qq}. Most quantiles plotted for the generated samples are approximately 25\% lower than their corresponding quantile in the test set.
 
 \begin{figure}[htbp]
       \centering
-      \includegraphics[width=\linewidth]{no_transform_global_shift.png}
-      \caption{Sample generated via our model trained with no transformation of the input data that exhibits an unnatural global shift in precipitation rates. The format is the same as Figure \ref{fig:no_transform_sample}.}
-      \label{fig:no_transform_global_shift}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_qq_low.png}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.91 \le q \le 0.999 \}$}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_qq.png}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.9991 \le q \le 0.9999999 \}$}
+      \end{subfigure}
+      \caption{Quantile-quantile plots for individual cells within the test set from UKCP18 against samples generated via our model trained with no transformation. A given point represents the precipitation rate for a given quantile in both the test set and the generated samples. Both plots are for the same samples, with different quantiles plotted; the quantiles plotted are disjoint subsets of $\mathcal{Q} = \{1 - 10^{-n_1} + n_2 \cdot 10^{-n_1 - 1}\mid n_1,n_2\in \mathbb{N}, 1 \le n_2 \le 9\}$.}
+      \label{fig:no_transform_qq}
 \end{figure}
+
+The underrepresentation of precipitation events beyond trace precipitation, in coalescence with the significant noise at the lower end of the precipitation scale and the baseline shift, induces an overall imbalanced representation of the precipitation distribution. In effect, we can consider the model to be severely overestimating the frequency of trace precipitation in detriment to the frequency of both extreme precipitation and dry---or clear---weather conditions.
 
 \subsection{Square Root Transformation}
 
-Empirically, we found that performing a square root transformation to the input data eliminated the two primary problems observed in samples generated via our model trained with no transformation. Namely, the square root transformation eliminated any detectable noise at the lower end of the precipitation scale, and none of its samples contained the unnatural global shift in precipitation rates. The noise elimination at the lower end of the precipitation scale is evident in Figure \ref{fig:no_transform_vs_sqrt_histogram_low}. Unlike in the case of no transformation, the unnatural deviation from the test distribution shape below approximately 0.2 millimetres per hour is absent in the samples generated via the square root transformation.
+Empirically, we found that performing a square root transformation to the input data eliminated the two primary problems observed in samples generated via our model trained with no transformation. Namely, it eliminated any detectable noise at the lower end of the precipitation scale, and none of its samples contained the unnatural baseline shift in precipitation rates. The improvement is evident in Figure \ref{fig:no_transform_vs_sqrt_histogram_low}. Unlike in the case of the model trained without any transformation to the input data, the substantial deviation from the test distribution shape below approximately 0.2 millimetres per hour is absent. We speculate this is due to the square root transformation causing a significant proportion of the space to be occupied by rates at the lower end of the precipitation scale. For example, with no transformation, the region below 0.2 millimetres per hour occupies approximately 0.2\% of the space. Whereas with the square root transformation, the same area occupies approximately 5\% of the space. As such, this equates to approximately a 20-fold increase in the proportion of the space allocated to the same region.
 
 \begin{figure}[htbp]
       \centering
-      \includegraphics[width=.75\linewidth]{no_transform_vs_sqrt_histogram_low.png}
-      \caption{Distribution of precipitation rates below 0.5 millimetres per hour in samples generated via our model trained with the square root transformation compared to both samples generated via our model trained with no transformation and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram_low}}
-      \label{fig:no_transform_vs_sqrt_histogram_low}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_histogram_low.png}
+            \caption{Below 0.3 millimetres per hour}
+            \label{fig:no_transform_vs_sqrt_histogram_low}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_histogram.png}
+            \caption{Full distribution}
+      \end{subfigure}
+      \caption{Distribution of precipitation rates in samples generated via our model trained with the square root transformation, compared to both our model trained with no transformation and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram}}
+      \label{fig:no_transform_vs_sqrt_histogram}
 \end{figure}
 
-The significant improvement in sample quality is clear evidence that a transformation of the input can be critical to the performance of a diffusion model.
+Conducting a square root transformation to the input data improved the quality of our samples beyond simply eliminating the two aforementioned problems. As evident from the spatial and temporal PSD graphs in Figure \ref{fig:no_transform_vs_sqrt_psd}, the power in the samples generated via the square root transformation is closer to that of the test set. The improvement holds over both the spatial and temporal dimensions at all scales.
+
+\begin{figure}[htbp]
+      \centering
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_psd_spatial.png}
+            \caption{Spatial Dimensions}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_psd_temporal.png}
+            \caption{Temporal Dimension}
+      \end{subfigure}
+      \caption{PSD graphs for samples generated via our model trained with the square root transformation, samples generated via our model trained with no transformation, and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_psd}.}
+      \label{fig:no_transform_vs_sqrt_psd}
+\end{figure}
+
+Moreover, for less intense precipitation---up to approximately 6 millimetres per hour---quantiles from the model trained via the square root transformation were closer to the ideal quantiles from the test set than those generated via the model trained with no transformation, as evident in Figure \ref{fig:no_transform_vs_sqrt_qq_low}. We can similarly see the superior performance of the model trained via the square root transformation in this region from the distribution in Figure \ref{fig:no_transform_vs_sqrt_histogram_low}. However, for more intense precipitation, the dominance of either model is more ambiguous, as can be seen in Figure \ref{fig:no_transform_vs_sqrt_qq_high}. Namely, the model trained via the square root transformation performed significantly better at the highest end of the scale, above 30 millimetres per hour. However, quantiles from the model trained with no transformation were  closer to the target distribution, particularly in the region from 10--30 millimetres per hour. It is important to note that this is the sole domain wherein we found the square root transformation to yield a minor degradation in sample quality.
+
+\begin{figure}[htbp]
+      \centering
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_qq_low.png}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.91 \le q \le 0.999 \}$}
+            \label{fig:no_transform_vs_sqrt_qq_low}
+      \end{subfigure}
+      \begin{subfigure}{0.49\textwidth}
+            \includegraphics[width=\linewidth]{no_transform_vs_sqrt_qq.png}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.9991 \le q \le 0.9999999 \}$}
+            \label{fig:no_transform_vs_sqrt_qq_high}
+      \end{subfigure}
+      \caption{Quantile-quantile plots for individual cells within the test set from UKCP18 against both samples generated via our model trained with the square root transformation and our model trained with no transformation. The format is the same as Figure \ref{fig:no_transform_qq}. $\mathcal{Q} = \{1 - 10^{-n_1} + n_2 \cdot 10^{-n_1 - 1}\mid n_1,n_2\in \mathbb{N}, 1 \le n_2 \le 9\}$.}
+\end{figure}
+
+In all, we found the square root transformation to yield a significant improvement in sample quality, thus serving as clear evidence that a transformation of the input can be critical to the performance of a diffusion model.
 
 \section{Learning a Transformation}
 \label{sec:results_learning_transformation}
@@ -1085,7 +1161,7 @@ Intuitively, since the $\log$ function itself is monotonically increasing, the n
 
 \subsection{Transformation Neural Network}
 
-We utilise a simple neural network with two fully-connected hidden layers to learn the transformation $h_\omega$ from Equation \ref{eq:weighted_loss_transform}. The network contains only a single neuron in both the input and output layers and 16 neurons in each hidden layer; we use the $\tanh$ activation function for each neuron in both hidden layers and for the output neuron. We restrict all the weights---not including biases---to be positive to ensure the learnt transformation is monotonically increasing. Since the logarithm of zero is undefined, we add a small multiple of the input to the network's output to prevent the gradient from being zero at any point. We scale the output to the range $[-1,1]$.
+We utilise a simple neural network with two fully-connected hidden layers to learn the transformation $h_\omega$ from Equation \ref{eq:weighted_loss_transform}. The network contains only a single neuron in both the input and output layers and 16 neurons in each hidden layer; we use the $\tanh$ activation function for each neuron in both hidden layers and for the output neuron. We restrict alxwl the weights---not including biases---to be positive to ensure the learnt transformation is monotonically increasing. Since the logarithm of zero is undefined, we add a small multiple of the input to the network's output to prevent the gradient from being zero at any point. We scale the output to the range $[-1,1]$.
 
 \subsection{Improved Weighted Loss with a Change of Variable}
 
@@ -1115,32 +1191,48 @@ As such, we can use the masking function and masking set to influence the gradie
 
 Importantly, for both of these solutions, we did not conduct any systematic hyperparameter search; thus, it is likely that both our choices of masking set and minimum gradient coefficient are suboptimal.
 
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.5\linewidth]{learnt_transform.png}
+      \caption{The transformation learnt by our model trained with the loss function given in Equation \ref{eq:weighted_loss_transform_masked}. The horizontal axis is the value of some element $x_i\in[-1, 1]$ input to the transformation network; the vertical axis is the corresponding output $h_\omega(x_i)\in [-1, 1]$.}
+      \label{fig:learnt_transform}
+\end{figure}
+
 \subsection{Comparison of the Learnt and Square Root Transformations}
 
-Neither our model that learnt its transformation, nor our model trained via the square root transformation, performed flawlessly by all metrics. Both models tended to underrepresent non-zero precipitation events in their generated samples, as evident from Figure \ref{fig:learnt_transform_vs_sqrt_qq}. The output space covered by the quantiles plotted in Figure \ref{fig:learnt_transform_vs_sqrt_qq_lower} approximately corresponds to light precipitation---the model that learnt its transformation performs better in this region. However, the dominance of one model over the other is less distinct for the more extreme precipitation events covered by Figure \ref{fig:learnt_transform_vs_sqrt_qq_upper}. The model trained with the square root transformation performs marginally better in two regions---from 5--10 millimetres per hour and above 30 millimetres per hour---though the model that learnt its transformation performs better in the remaining regions.
+Neither our model that learnt its transformation, nor our model trained via the square root transformation, performed flawlessly by all metrics. Both models tended to underrepresent non-zero precipitation events in their generated samples, as evident from Figure \ref{fig:learnt_transform_vs_sqrt_qq}. The output space covered by the quantiles plotted in Figure \ref{fig:learnt_transform_vs_sqrt_qq_low} approximately corresponds to light precipitation---the model that learnt its transformation performs better in this region. However, the dominance of one model over the other is less distinct for the more extreme precipitation events covered by Figure \ref{fig:learnt_transform_vs_sqrt_qq_upper}. The model trained with the square root transformation performs marginally better in two regions---from 5--10 millimetres per hour and above 30 millimetres per hour---though the model that learnt its transformation performs better in the remaining regions.
 
 \begin{figure}[htbp]
       \centering
-      \begin{subfigure}{.495\textwidth}
-            \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_qq_lower.png}
-            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.91 \le q \le 0.99\}$}
-            \label{fig:learnt_transform_vs_sqrt_qq_lower}
+      \begin{subfigure}{.49\textwidth}
+            \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_qq_low.png}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.91 \le q \le 0.999\}$}
+            \label{fig:learnt_transform_vs_sqrt_qq_low}
       \end{subfigure}
-      \begin{subfigure}{.485\textwidth}
+      \begin{subfigure}{.49\textwidth}
             \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_qq.png}
-            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.991 \le q \le 0.9999999 \}$}
+            \caption{Quantiles: $\{q\in\mathcal{Q}\mid 0.9991 \le q \le 0.9999999 \}$}
             \label{fig:learnt_transform_vs_sqrt_qq_upper}
       \end{subfigure}
-      \caption{Quantile-quantile plots for individual cells within the test set from UKCP18 against both samples generated via our model trained with the square root transformation and samples generated via our model that learnt its transformation. A given point represents the precipitation rate for a given quantile in both the test set and the generated samples. Green points are for the square root transformation; red points are for the learnt transformation. Both plots are for the same samples, with different quantiles plotted; the quantiles plotted are disjoint subsets of $\mathcal{Q} = \{1 - 10^{-n_1} + n_2 \cdot 10^{-n_1 - 1}\mid n_1,n_2\in \mathbb{N}, 1 \le n_2 \le 9\}$.}
+      \caption{Quantile-quantile plots for individual cells within the test set from UKCP18 against both samples generated via our model trained with the square root transformation and samples generated via our model that learnt its transformation. The format is the same as Figure \ref{fig:no_transform_qq}. $\mathcal{Q} = \{1 - 10^{-n_1} + n_2 \cdot 10^{-n_1 - 1}\mid n_1,n_2\in \mathbb{N}, 1 \le n_2 \le 9\}$.}
       \label{fig:learnt_transform_vs_sqrt_qq}
 \end{figure}
 
-\begin{figure}[htbp]
-      \centering
-      \includegraphics[width=.75\linewidth]{learnt_transform_vs_sqrt_histogram.png}
-      \caption{Distribution of precipitation rates in samples generated via our model trained with the square root transformation, our model that learnt its transformation, and the test set from UKCP18. The format is the same as Figure \ref{fig:ukcp18_test_histogram}.}
-      \label{fig:learnt_transform_vs_sqrt_histogram}
-\end{figure}
+% \begin{figure}[htbp]
+%       \centering
+%       \begin{subfigure}{0.49\textwidth}
+%             \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_histogram_low.png}
+%             \caption{Below 0.3 millimetres per hour}
+%             \label{fig:learnt_transform_vs_sqrt_histogram_low}
+%       \end{subfigure}
+%       \begin{subfigure}{0.49\textwidth}
+%             \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_histogram.png}
+%             \caption{Full distribution}
+%             \label{fig:learnt_transform_histogram_high}
+%       \end{subfigure}
+%       \caption{Distribution of precipitation rates in samples generated via our model that learnt its transformation, compared to both samples generated via our model trained with the square transformation and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram}.}
+%       \label{fig:learnt_transform_histogram}
+% \end{figure}
 
 \begin{figure}[htbp]
       \centering
@@ -1154,7 +1246,7 @@ Neither our model that learnt its transformation, nor our model trained via the 
             \caption{Temporal Dimension}
             \label{fig:learnt_transform_vs_sqrt_psd_temporal}
       \end{subfigure}
-      \caption{Power spectral density (PSD) plots for samples generated via our model trained with the square root transformation, our model that learnt its transformation, and the test set from UKCP18. The horizontal axis is the number of waves, denoted $k$; the vertical axis is the mean power across all samples for a given $k$, denoted $P(k)$. Both axes are logarithmic. The left plot is a PSD plot for two spatial dimensions, and the right plot is a PSD plot for the temporal dimension.}
+      \caption{PSD graphs for samples generated via our model trained with the square root transformation, our model that learnt its transformation, and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_psd}.}
       \label{fig:learnt_transform_vs_sqrt_psd}
 \end{figure}
 
@@ -1198,9 +1290,9 @@ The superior performance of our model that learnt its transformation is most evi
 %       \label{fig:learnt_transform_sample_2}
 % \end{figure}
 
-\section{Temporal Interpolation}
-
 \section{Autoregressive Generation of Longer Sequences}
+
+\section{Temporal Interpolation}
 
 \section{Forecasting}
 
