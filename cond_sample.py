@@ -2,7 +2,7 @@ import torch
 from video_diffusion_pytorch import Unet3D, GaussianDiffusion, num_to_groups
 import xarray as xr
 
-MILESTONE = 209
+MILESTONE = 218
 
 model = Unet3D(
     dim=64,
@@ -16,7 +16,7 @@ diffusion = GaussianDiffusion(
     num_timesteps=1000,   # number of steps
 )
 
-checkpoint = torch.load(f"/user/work/cj19328/results_transform_0.1/model-{MILESTONE}.pt")
+checkpoint = torch.load(f"/user/work/cj19328/results_transform_0.1_lambda_30/model-{MILESTONE}.pt")
 diffusion.load_state_dict(checkpoint['ema'])
 
 if torch.cuda.is_available():
@@ -48,10 +48,34 @@ def inverse_tensor(y_tensor):
     return x_tensor
 
 
+if torch.cuda.is_available():
+    diffusion = diffusion.cuda()
 
-# index = 5555
-# x_orig = torch.from_numpy(xr.open_dataset("/user/work/cj19328/train_test/test.nc").pr.isel(time=range(index, index + 10)).values.reshape(1, 1, 10, 64, 64))
-# indices_a = [0, 3, 6, 9]
+indices_a = [0, 2, 4, 6, 8]
+
+samples = torch.empty(0, 1, 10, 64, 64)
+
+BATCH_SIZE = 16
+
+index = 0
+while True:
+    x_orig = torch.from_numpy(xr.open_dataset("/user/work/cj19328/train_test/test.nc").pr.isel(time=range(index, index + 10 * BATCH_SIZE)).values.reshape(-1, 1, 10, 64, 64))
+    x_a = x_orig[:, :, indices_a].cuda()
+
+    x_a = 2 * ((x_a - PR_MIN) / (PR_MAX - PR_MIN))
+    x_a_shape = x_a.shape
+    x_a = diffusion.monotonic_net(x_a.reshape(*x_a_shape, 1))
+    x_a = diffusion.monotonic_net.normalise(x_a)
+    x_a = x_a.reshape(*x_a_shape)
+
+    x_cond_sample = diffusion.sample_recon_guidance(x_a, indices_a)
+    x_cond_sample = inverse_tensor(x_cond_sample)
+    samples = torch.cat([samples, x_cond_sample], dim = 0)
+    torch.save(samples, f"/user/home/cj19328/cond_sample.pt")
+
+    index += 10 * BATCH_SIZE
+
+
 # x_a = x_orig[:, :, indices_a]
 
 # if torch.cuda.is_available():
@@ -73,31 +97,29 @@ def inverse_tensor(y_tensor):
 
 
 
-if torch.cuda.is_available():
-    diffusion = diffusion.cuda()
 
-samples = torch.zeros(0, 1, 100, 64, 64)
+# samples = torch.zeros(0, 1, 100, 64, 64)
 
 
-BATCH_SIZE = 4
-LENGTH = 1000
+# BATCH_SIZE = 4
+# LENGTH = 1000
 
-# Since recon-guidance can only take a match batch size of 16, we need to multiple iterations
-for _ in range(10):
-    indices_a = [0, 1, 2, 3, 4]
-    indices_b = [5, 6, 7, 8, 9]
-    offset = 5
+# # Since recon-guidance can only take a match batch size of 16, we need to multiple iterations
+# for _ in range(10):
+#     indices_a = [0, 1, 2, 3, 4]
+#     indices_b = [5, 6, 7, 8, 9]
+#     offset = 5
 
-    sample = diffusion.sample(batch_size = BATCH_SIZE).cpu()
-    print(sample.shape)
-    for _ in range((LENGTH - 10) // 5):
-        x_a = sample[:, :, [i + offset for i in indices_a]].cuda()
-        x_cond_sample=diffusion.sample_recon_guidance(x_a, indices_a).cpu()
-        sample = torch.cat([sample, x_cond_sample[:, :, indices_b]], dim = 2)
-        print(sample.shape)
-        offset += 5
+#     sample = diffusion.sample(batch_size = BATCH_SIZE).cpu()
+#     print(sample.shape)
+#     for _ in range((LENGTH - 10) // 5):
+#         x_a = sample[:, :, [i + offset for i in indices_a]].cuda()
+#         x_cond_sample=diffusion.sample_recon_guidance(x_a, indices_a).cpu()
+#         sample = torch.cat([sample, x_cond_sample[:, :, indices_b]], dim = 2)
+#         print(sample.shape)
+#         offset += 5
 
-    sample = inverse_tensor(sample).reshape(BATCH_SIZE, 1, LENGTH, 64, 64)
-    samples = torch.cat([samples, sample])
-    torch.save(samples, f"/user/home/cj19328/cond_sample/long_video.pt")
-    print("Done!")
+#     sample = inverse_tensor(sample).reshape(BATCH_SIZE, 1, LENGTH, 64, 64)
+#     samples = torch.cat([samples, sample])
+#     torch.save(samples, f"/user/home/cj19328/cond_sample/long_video.pt")
+#     print("Done!")

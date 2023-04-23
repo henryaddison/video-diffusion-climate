@@ -561,7 +561,7 @@ class GaussianDiffusion(nn.Module):
         self.num_frames = num_frames
         self.num_timesteps = num_timesteps
         self.monotonic_net = MonotonicNet()
-        self.omega_r = 100000 # Reconstruction-guided sampling
+        self.recon_weight = 1000000 # Reconstruction-guided sampling
 
     def log_snr_schedule_cosine(self, t, log_snr_min = -30, log_snr_max = 30):
         b = t.shape[0]
@@ -610,7 +610,7 @@ class GaussianDiffusion(nn.Module):
             x_hat_a = x_hat[:, :, indices_a]
             error = F.mse_loss(x_a, x_hat_a)
             grad = torch.autograd.grad(outputs = error, inputs = z_t_b)[0]
-            x_hat[:, :, indices_b] -= ((self.omega_r * alpha_t) / 2) * grad
+            x_hat[:, :, indices_b] -= ((self.recon_weight * alpha_t) / 2) * grad
 
         # x_hat = x_hat.clamp(-1, 1)
         mu_st, sigma_st = self.q_posterior(z_t, x_hat, lambda_s, lambda_t)
@@ -653,11 +653,13 @@ class GaussianDiffusion(nn.Module):
             t = torch.full((b,), i / self.num_timesteps).cuda()
             lambda_s = self.log_snr_schedule_cosine(s)
             lambda_t = self.log_snr_schedule_cosine(t)
-            z_t = self.p_sample(z_t, lambda_s, lambda_t, is_final_step = i == 1, x_a = x_a, indices_a = indices_a)
+            z_t = self.p_sample(z_t, lambda_s, lambda_t, x_a = x_a, indices_a = indices_a)
 
             z_t[:, :, indices_a] = self.q_sample_recon_guidance(z_t[:, :, indices_a], x_a, lambda_s, lambda_t)
 
         z_t[:, :, indices_a] = x_a
+        
+        z_t = z_t.clamp_(-1, 1)
 
         return z_t
 
