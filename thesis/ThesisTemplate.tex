@@ -139,6 +139,8 @@
 
 \chapter*{Ethics Statement}
 
+This project did not require ethical review, as determined by my supervisor Dr Laurence Aitchison.
+
 % {\bf A compulsory section} 
 % \vspace{1cm} 
 
@@ -214,12 +216,16 @@
       i.i.d. &: & Independent and identically distributed\\
       KL &: & Kullback--Leibler\\
       VAE &: & Variational Autoencoder\\
+      ELBO &: & Evidence Lower Bund\\
+      QQ &: & Quantile-Quantile\\
+      PSD &: & Power Spectral Density\\
       &\vdots&\\
       $\mathbf{X}^{\circ n}$ &: & Element-wise exponentiation of matrix $\mathbf{X}$ with power $n$\\
       $\mathrm{diag}(\mathbf{x})$ &: & Diagonal matrix with the values of vector $\mathbf{x}$ on the diagonal\\
       $\log(x)$ &: & Natural logarithm function (i.e. logarithm with base $e$) applied to $x$\\
       $f\simeq g$ &: & $g$ is an unbiased estimator of $f$\\
-     
+      $D_{\mathrm{KL}}(P\Vert Q)$ &: & KL divergence of $P$ from $Q$\\
+
 % AES                 &:     & Advanced Encryption Standard                                         \\
 % DES                 &:     & Data Encryption Standard                                             \\
 %                     &\vdots&                                                                      \\
@@ -298,19 +304,19 @@ In the context of a latent-variable model, \textit{generation} refers to the pro
 
 As mentioned in Section \ref{sec:background_generative}, the goal of a generative model is to learn parameters $\theta$ such that $p_\theta(\mathbf{x})\approx p^*(\mathbf{x})$. One way to interpret this is as a minimisation problem. Namely, we wish to learn parameters $\theta$ that minimise the Kullback--Leibler (KL) divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$:
 \begin{align}
-      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))
+      \argmin_\theta D_{\mathrm{KL}}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))
 \end{align}
-The KL divergence $D_{KL}$ measures the dissimilarity between two probability distributions; in our case, it provides a measure of the information lost when we approximate the true distribution $p^*(\mathbf{x})$ with our model distribution $p_\theta(\mathbf{x})$.
+The KL divergence $D_{\mathrm{KL}}$ measures the dissimilarity between two probability distributions; in our case, it provides a measure of the information lost when we approximate the true distribution $p^*(\mathbf{x})$ with our model distribution $p_\theta(\mathbf{x})$.
 
 We can reformulate the KL divergence of the true distribution $p^*(\mathbf{x})$ from our model distribution $p_\theta(\mathbf{x})$ to provide a likelihood-based interpretation:
 \begin{align}
-      D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log\left(\frac{p^*(\mathbf{x})}{p_\theta(\mathbf{x})}\right)\right]\\
+      D_{\mathrm{KL}}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log\left(\frac{p^*(\mathbf{x})}{p_\theta(\mathbf{x})}\right)\right]\\
       &=\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[\log p^*(\mathbf{x})\right]+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]\\
       &=-\mathcal{H}(p^*(\mathbf{x}))+\mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
 where $\mathcal{H}{(p^*(\mathbf{x}))}$ is the entropy of the true distribution $p^*(\mathbf{x})$ and is constant. As such, minimisation of the KL divergence in this context equates to minimisation of the expected negative log-likelihood of our model distribution $p_\theta(\mathbf{x})$ with respect to $\mathbf{x}\sim p^*(\mathbf{x})$; formally:
 \begin{align}
-      \argmin_\theta D_{KL}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\argmin_\theta \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
+      \argmin_\theta D_{\mathrm{KL}}(p^*(\mathbf{x})\Vert p_\theta(\mathbf{x}))&=\argmin_\theta \mathbb{E}_{\mathbf{x}\sim p^*(\mathbf{x})}\left[-\log p_\theta(\mathbf{x})\right]
 \end{align}
 Under the assumption that each of the $N_\mathcal{D}$ samples in our dataset $\mathcal{D}$ are i.i.d. according to $p^*(\mathbf{x})$, we can construct an unbiased estimator:
 \begin{align}
@@ -377,13 +383,13 @@ Not making these simplifying assumptions is the reason for introducing the infer
       &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
       &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})q_\phi(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})q_\phi(\mathbf{z}|\mathbf{x})}\right)\right]\\
       &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]-\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{q(\mathbf{z}|\mathbf{x})}{p_\theta(\mathbf{z}|\mathbf{x})}\right)\right]\\
-      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]-D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))
+      &=\mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]-D_{\mathrm{KL}}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))
       \label{eq:vae_elbo}
       % &\ge \mathbb{E}_{\mathbf{z}\sim q_\phi(\mathbf{z}|\mathbf{x})}\left[\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z})}{q(\mathbf{z}|\mathbf{x})}\right)\right]
 \end{align}
 The second term in Equation \ref{eq:vae_elbo} is the KL divergence of $q_\phi(\mathbf{z}|\mathbf{x})$ and $p_\theta(\mathbf{z}|\mathbf{x})$ and is non-negative:
 \begin{align}
-      D_{KL}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\ge 0
+      D_{\mathrm{KL}}(q_\phi(\mathbf{z}|\mathbf{x})\Vert p_\theta(\mathbf{z}|\mathbf{x}))\ge 0
 \end{align}
 and zero if and only if $q_\phi(\mathbf{z}|\mathbf{x})=p_\theta(\mathbf{z}|\mathbf{x})$. The first term in Equation \ref{eq:vae_elbo} is the additive inverse of the \textit{evidence lower bound objective} (ELBO); in this work, we will refer to this as the ELBO loss, denoted $\mathcal{L}_{\mathrm{ELBO}}$. By the non-negativity of the KL divergence, it serves as a variational bound on the negative log-likelihood of the observed variable $\mathbf{x}$:
 \begin{align}
@@ -434,16 +440,16 @@ We can formulate the ELBO loss for the continuous-time MHVAE as follows:
 \begin{align}
       -\log p_\theta(\mathbf{x})&\le \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})\\
       &=\mathbb{E}_{\mathbf{z}_0,\ldots,\mathbf{z}_1\sim q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\left[-\log\left(\frac{p_\theta(\mathbf{x},\mathbf{z}_0,\ldots,\mathbf{z}_1)}{q_\phi(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})}\right) \right]\\
-      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
+      &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{\mathrm{KL}}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))
 \end{align}
 Per datapoint $\mathbf{x}$, we define $\mathcal{L}_T(t)$ as the KL divergence of $q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t$ to 1, and its corresponding time derivative $\mathcal{L}_T'(t)$ as:
 \begin{align}
-      \mathcal{L}_T(t)&=D_{KL}(q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))\label{eq:dkl_t}\\
+      \mathcal{L}_T(t)&=D_{\mathrm{KL}}(q_\phi(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))\label{eq:dkl_t}\\
       \mathcal{L}_T'(t)&=\frac{d}{dt}\mathcal{L}_T(t)
 \end{align}
 We can substitute this into the ELBO loss and use the second fundamental theorem of calculus to yield the following form for the ELBO loss, defined per datapoint $\mathbf{x}$ as:
 \begin{align}
-      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{KL}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
+      \mathcal{L}_{\mathrm{ELBO}}(\mathbf{x})&=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+D_{\mathrm{KL}}(q(\mathbf{z}_0,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta (\mathbf{z}_0,\ldots,\mathbf{z}_1))\\
       &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_T(0)\\
       &=\mathbb{E}_{\mathbf{z}_0\sim q(\mathbf{z}_0,\mathbf{x})}\left[-\log p_\theta(\mathbf{x}|\mathbf{z}_0)\right]+\mathcal{L}_T(1)-\int_0^1\mathcal{L}'_T(t)\mathrm{d}t \label{eq:elbo_mhvae}
 \end{align}
@@ -564,7 +570,7 @@ In the broader literature, diffusion models utilise a variety of numerical solve
 \end{align}
 where $s(i)=(i - 1)\cdot T^{-1}$ and $t(i)=i\cdot T^{-1}$. For large enough $\lambda_{\max}$, $\mathbf{z}_0$ is almost noiseless, so learning a model $p_\theta(\mathbf{z}_0)$ is practically equivalent to learning a model $p_\theta(\mathbf{x})$. For sufficiently small $\lambda_{\min}$, $\mathbf{z}_1$ contains almost no information about $\mathbf{x}$. As such, there exists a distribution $p_\theta(\mathbf{z}_1)$ such that:
 \begin{align}
-      D_{KL}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))\approx 0
+      D_{\mathrm{KL}}(q(\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_1))\approx 0
 \end{align}
 For variance-preserving diffusion models, as used in this work, we model $p_\theta(\mathbf{z}_1)$ as the multivariate standard Gaussian:
 \begin{align}
@@ -746,7 +752,7 @@ We can interpret the variance-preserving diffusion model used in this work as an
 
 For a given datapoint $\mathbf{x}$, we define $\mathcal{L}_\Lambda(\lambda)$ as the KL divergence of $q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})$ from $p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1)$ for a subset of timesteps from $t=f_\Lambda^{-1}(\lambda)$ to $1$ for datapoint $\mathbf{x}$:
 \begin{align}
-      \mathcal{L}_\Lambda(\lambda)=D_{KL}(q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))
+      \mathcal{L}_\Lambda(\lambda)=D_{\mathrm{KL}}(q(\mathbf{z}_t,\ldots,\mathbf{z}_1|\mathbf{x})\Vert p_\theta(\mathbf{z}_t,\ldots,\mathbf{z}_1))
 \end{align}
 Notably, $\mathcal{L}_\Lambda(\lambda)$ equates to $\mathcal{L}_T(t)$ defined in Equation \ref{eq:dkl_t} under a simple change of variable:
 \begin{align}
@@ -795,7 +801,7 @@ Notable further analysis by Kingma and Gao \cite{Understanding_Diffusion_Objecti
 \end{align}
 The likelihood-based interpretation comes from the fact that $\mathcal{L}_\Lambda(\lambda)$ serves as a variational bound on the negative marginal likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$:
 \begin{align}
-      \mathcal{L}_\Lambda(\lambda)&\ge D_{KL}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
+      \mathcal{L}_\Lambda(\lambda)&\ge D_{\mathrm{KL}}(q(\mathbf{z}_t|\mathbf{x})\Vert p(\mathbf{z}_t))\\
       &=\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[-\log p(\mathbf{z}_t)\right]+\mathbb{E}_{\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})}\left[\log q(\mathbf{z}_t|\mathbf{x})\right]
 \end{align}
 As such, minimisation of $\mathcal{L}_\Lambda(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_{\mathrm{WL}}$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. 
@@ -1009,9 +1015,9 @@ We can attribute this deviation to the two aforementioned issues but cannot pinp
 
 Noise of the observed magnitude creates unique challenges for diffusion models generating precipitation data---challenges that do not present as significant an issue in the more common domain of image generation. There are two primary reasons for this. First and foremost, the distribution of precipitation rates in our data is far more skewed than the distribution of colours in image data. This skew is evident in Figure \ref{fig:no_transform_histogram_high}, which contains the full distribution of precipitation rates in our test set from UKCP18. 83\% of the cells in the test set are of a precipitation rate lower than 0.01 millimetres per hour; to put this into perspective, the highest precipitation rate in our test set is approximately 60 millimetres per hour. As a direct result of this extreme distribution, even relatively small amounts of noise at the lower end of the scale or minute inaccuracies in the reverse-time generative model can significantly impact the quality of the generated samples. The second challenge that generating precipitation data presents in contrast to image data is that precipitation is a continuous variable, in contrast to the discrete values that comprise each colour channel in an image. Thus, a final discretisation step at the end of the generative process for images eliminates much of the noise. We cannot take advantage of this approach for precipitation data. In the context of Figure \ref{fig:no_transform_sample} wherein the significant deviation from the true distribution is evident below the 0.2 millimetres per hour threshold, this constitutes approximately 0.2\% of our output space. If this were an image with 256 discrete values per colour channel, this relative amount of the output space represents less than a single discrete value. Thus, a final discretisation step would eliminate the problem almost entirely.
 
-Moving out attention beyond the lower extremity of the precipitation scale, Figure \ref{fig:no_transform_hustogram_high} illustrates the distribution of individual cells' values within the samples generated by our model, contrasting them with those from the test set. The model demonstrates merit in capturing the overall shape of the true distribution, exhibiting a downward slope that closely resembles the true distribution. This similarity suggests the model has a reasonable degree of success in approximating the general frequency of precipitation events of varying intensity levels. However, as we progress to more intense precipitation levels, the discrepancy between the generated samples and the test set becomes more pronounced, suggesting a limitation in the model's ability to replicate extreme events accurately.
+Moving our attention beyond the lower extremity of the precipitation scale, Figure \ref{fig:no_transform_histogram_high} illustrates the distribution of individual cells' values within the samples generated by our model, contrasting them with those from the test set. The model demonstrates merit in capturing the overall shape of the true distribution. This similarity suggests that the model has a reasonable degree of success in learning the overall frequency of precipitation events of varying intensity levels. However, it is evident that as we progress to more intense precipitation levels, the frequency discrepancy between the generated samples and the test set becomes more pronounced, suggesting a limitation in the model's ability to generate extreme events sufficiently frequently.
 
-To gain a more detailed understanding of the model's performance in a similar respect, we employ a quantile-quantile (QQ) plot, which offers a complementary perspective to the histogram by comparing the quantiles of the generated samples against the quantiles of the test set. QQ plots are particularly useful for detecting deviations in the distribution. From the QQ plot in Figure \ref{fig:no_transform_qq}, it becomes evident that for a given precipitation level, our model generally generates samples underrepresenting the frequency of all precipitation events less than that point. Across most of the spectrum of precipitation intensities observed in the test set, we find a consistent underestimation of approximately 25\% between the value of any given quantile in the test set and its corresponding quantile in the generated samples. 
+To gain a more detailed understanding of the model's performance in a similar respect, we employ a quantile-quantile (QQ) plot, which offers a complementary perspective to the histogram by comparing the quantiles of the generated samples against the quantiles of the test set. QQ plots are particularly useful for detecting deviations in the distribution. From the QQ plot in Figure \ref{fig:no_transform_qq}, it is evident that for a given intensity across most of the precipitation range, our model underestimates the frequency of all events less than that point. There is typically a 25\% discrepancy between the value of any given quantile in the test set and its corresponding quantile in the generated samples.
 
 \begin{figure}[htbp]
       \centering
@@ -1054,31 +1060,27 @@ From Figure \ref{fig:no_transform_psd}, it is evident that the samples in the te
 
 In the previous section, we introduced baseline results for our model trained without any transformation applied to the input data. In this section, we build upon this foundation by presenting results for a model employing a square-root transformation to the input, which we henceforth refer to as our \textit{square-root-transformation model} for brevity. The results showcased herein provide compelling evidence that implementing a suitable transformation can significantly enhance the performance of a diffusion model.
 
-Foremost, applying the square-root transformation to the input data effectively addressed the two primary concerns observed in the samples generated by our no-transformation model. Specifically, it eliminated the discernible noise at the lower end of the precipitation scale and averted the unnatural baseline shift in precipitation rates. The improvement is clearly illustrated in Figure \ref{fig:no_transform_vs_sqrt_histogram_low}. Notably, the deviation from the test distribution shape below 0.2 millimetres per hour, previously observed in the no-transformation model, is no longer present in samples generated by our square-root-transformation model. The absence of a significant deviation exemplifies the efficacy of incorporating a suitable transformation in the model training process, leading to improved performance.
+Foremost, applying the square-root transformation to the input data effectively addressed the two primary concerns observed in the samples generated by our no-transformation model. Specifically, it eliminated the discernible noise at the lower end of the precipitation scale and averted the unnatural baseline shift in precipitation rates. The improvement is clearly illustrated in Figure \ref{fig:no_transform_vs_sqrt_histogram_low}. Notably, the deviation from the test distribution shape below 0.2 millimetres per hour---observed in our no-transformation model---is absent in samples generated by our square-root-transformation model, exemplifying the effectiveness of incorporating an appropriate transformation during the model training process.
 
 \begin{figure}[htbp]
       \centering
       \begin{subfigure}{.49\textwidth}
             \includegraphics[width=\linewidth]{no_transform_vs_sqrt_histogram_low.png}
             \caption{Below 0.3 millimetres per hour}
+            \label{fig:no_transform_vs_sqrt_histogram_low}
       \end{subfigure}
       \begin{subfigure}{.49\textwidth}
             \includegraphics[width=\linewidth]{no_transform_vs_sqrt_histogram.png}
             \caption{Full range}
+            \label{fig:no_transform_vs_sqrt_histogram_full}
       \end{subfigure}
-      \caption{Distribution of precipitation rates below 0.3 millimetres per hour in samples generated via our square-root-transformation model, compared to samples from our no-transformation model and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram}}
-      \label{fig:no_transform_vs_sqrt_histogram_low}
+      \caption{Distribution of precipitation rates in samples generated via our square-root-transformation model compared to our samples generated via our no-transformation model and the test set from UKCP18. The format of each plot is the same as Figure \ref{fig:no_transform_histogram}}.
+      \label{fig:no_transform_vs_sqrt_histogram}
 \end{figure}
 
-We hypothesise the improvement is due to the transformation allocating a more significant portion of the output space $[-1, 1]$ to the power end of the precipitation scale. Without transformation, the input data is scaled linearly to the range $[-1, 1]$, resulting in the region below 0.2 millimetres per hour occupying only about 0.2\% of the output space. In contrast, the square-root transformation involves computing the square root of each input data element before applying the same linear scaling; consequently, the region below 0.2 millimetres per hour occupies approximately 5\% of the output space, representing a 20-fold increase. We cannot conclusively determine why allocating a more significant portion of the output space to the same region resolves the aforementioned issues. We recommend this as an investigation for future work.
+We hypothesise that the improvement is due to the transformation allocating a more significant portion of the output space $[-1, 1]$ to the lower end of the precipitation scale. Without transformation, the input data is scaled linearly to the range $[-1, 1]$, resulting in the region below 0.2 millimetres per hour occupying only about 0.2\% of the output space. In contrast, the square-root transformation involves computing the square root of each input data element before applying the same linear scaling; consequently, the region below 0.2 millimetres per hour occupies approximately 5\% of the output space, representing a 20-fold increase. We cannot conclusively determine why allocating a more significant portion of the output space to the same region resolves the aforementioned issues. We recommend this as an investigation for future work.
 
-Applying the square-root transformation not only addresses the two previously mentioned issues but also enhances the overall quality of our samples by most measures. Above the dry threshold and up to the 0.9995th quantile, samples produced via our square-root-transformation model are closer to those of the true distribution than samples generated via our square-root-transformation model, as evident from the QQ plot in Figure \ref{fig:no_transform_vs_sqrt_qq}. The 0.9995th quantile equates to a precipitation rate of approximately seven millimetres per hour in the test set, broadly corresponding to the beginning of what most consider heavy precipitation. 
-
-One such improvement is evident in the histogram in Figure \ref{fig:no_transform_histogram_high}. Namely, the distribution of individual cells' values is closer to the test set's distribution in the region up to approximately 10 millimetres per hour, broadly equating to the beginning of what most would consider heavy precipitation. 
-
-We see a similar improvement in the QQ plot in Figure \ref{fig:no_transform_vs_sqrt_qq}. Above the dry threshold, all quantiles up to the 0.999th are closer to the target from samples generated via our square-root-transformation model. There is a brief exception around the 0.2 millimetres per hour mark; however, this is primarily an artefact of the aforementioned issues and does not truly represent better performance in this region. However, for more intense precipitation, the dominance of either model is more ambiguous, as evident from the QQ plot in Figure \ref{fig:no_transform_vs_sqrt_qq}. The square-root-transformation model performed significantly better at the highest end of the scale, above 30 millimetres per hour. However, quantiles from the no-transformation model were closer to the target, particularly in the region from 10--30 millimetres per hour. However, we note that this area above the 0.999th quantile is the sole domain wherein we found the square-root transformation not to yield a definitive improvement in performance.
-
-% However, we note that this is the sole domain wherein we found the square root transformation to yield a minor degradation in performance. Overall, we thus interpret the model trained on the square root transformation to have marginally better learnt the frequency of precipitation rates at most intensities.
+Applying the square-root transformation not only addresses the two previously mentioned issues but also enhances the overall quality of our samples by most measures. As evident in Figure \ref{fig:no_transform_vs_sqrt_histogram_full}, up to approximately 12 millimetres per hour, the frequency of precipitation intensity in 1 millimetre per hour intervals more closely aligns with the test set's distribution compared to samples generated via our no-transformation model. We observe from the QQ plot in Figure \ref{fig:no_transform_vs_sqrt_qq} that this represents approximately 99.99\% of all precipitation events in the test set. Beyond this range---encompassing the most intense 0.01\% of precipitation events---the dominance of either model is less discernible.
 
 \begin{figure}[htbp]
       \centering
@@ -1087,14 +1089,16 @@ We see a similar improvement in the QQ plot in Figure \ref{fig:no_transform_vs_s
       \label{fig:no_transform_vs_sqrt_qq}
 \end{figure}
 
+Figure \ref{fig:sqrt_bias} depicts the mean-normalised bias for each $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ subarea in samples generated via our square-root-transformation model. Compared to the mean-normalised bias for our no-transformation model, given in Figure \ref{fig:no_transform_bias}, the bias is worse for most subareas. However, we argue that the relatively good mean-normalised bias of the no-transformation model is an artefact resulting from the two aforementioned issues at the lower end of the precipitation spectrum. These issues contribute to a reduced probability of the model generating precipitation rates below the dry threshold, consequently inducing an artificial increase in the mean precipitation rate. As such, we argue that the relatively severe bias in our square-root-transformation model does not represent an actual regression in performance. Notably, when employing the square-root transformation, we observe no correlation with our no-transformation model in the mean-normalised bias across different subareas, indicating that the choice of transformation can influence the spatial distribution of the bias. Unlike our no-transformation model, our square-root-transformation model exhibits severe mean-normalised bias across Central England, East of England, London, and South East England.
+
 \begin{figure}[htbp]
       \centering
       \includegraphics[width=.5\textwidth]{sqrt_bias.png}
-      \caption{Mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated by our square-root transformed model.}
+      \caption{Mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated by our square-root-transformation model.}
       \label{fig:sqrt_bias}
 \end{figure}
 
-Moving beyond the intensity of individual cells, we found that the square-root transformation benefited the power in our samples. More specifically, the average power over the spatial and temporal dimensions is closer to that of the test set in samples generated via the square-root-transformation model. The improvement is applicable over all scales, as evident from the spatial and temporal PSD graphs in Figure \ref{fig:no_transform_vs_sqrt_psd}. We interpret this as the square-root transformation enabling the model to learn the correct spatial and temporal characteristics of the true distribution more effectively.
+Moving beyond the intensity of individual cells, we found that the square-root transformation benefited the power in our samples. More specifically, the average power over the spatial and temporal dimensions more closely aligns with the test set in samples generated via the square-root-transformation model. The improvement is observable over all scales, as demonstrated by the spatial and temporal PSD graphs in Figure \ref{fig:no_transform_vs_sqrt_psd}. The consistent enhancement suggests that the square-root transformation facilitates the model's ability to learn and represent the spatial and temporal features inherent in the true precipitation distribution with better proficiency.
 
 \begin{figure}[htbp]
       \centering
@@ -1110,12 +1114,10 @@ Moving beyond the intensity of individual cells, we found that the square-root t
       \label{fig:no_transform_vs_sqrt_psd}
 \end{figure}
 
-In all, we found the square-root transformation to yield a significant improvement in sample quality, thus serving as clear evidence that a transformation of the input can be critical to the performance of a diffusion model.
-
 \section{Learning a Transformation}
 \label{sec:results_learning_transformation}
 
-In this section, we explore the possibility of learning a transformation of the input data instead of explicitly defining one.
+In this section, we build upon the significant improvements achieved with the square-root transformation; we introduce an approach that enables our model to learn a transformation rather than depending on a predefined function. By facilitating the adaptive discovery of a suitable transformation, we posit that this approach may hold the potential for generalisation with different distributions, not limited to precipitation. This adaptability could prove particularly valuable for distributions lacking an easily identifiable transformation to enhance performance, thus offering a flexible solution to enhance the performance of diffusion models across various applications.
 
 \subsection{Change of Variable Rule}
 \label{sec:results_change_of_variable}
@@ -1170,7 +1172,7 @@ Plugging the inequality into Equation \ref{eq:minus_log_in_terms_of_minus_log_tr
 \begin{align}
       -\log p_\theta(\mathbf{x})\le \tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h(x_i)}{\partial x_i}\right)\label{eq:optimal_elbo_no_parameters}
 \end{align}
-Thus, if we were to parameterise the transformation $\mathbf{h}_\omega$, with transformative parameters $\omega$, we would theoretically be able to learn some optimal transformation that enables us to minimise the negative log-likelihood of the observed variable $\mathbf{x}$. For completeness, the loss with transformative parameters $\omega$ yields only a minor modification to Equation \ref{eq:optimal_elbo_no_parameters} and is given by:
+Thus, if we were to parameterise the transformation $\mathbf{h}_\omega$, with transformative parameters $\omega$, we would theoretically be able to learn some optimal transformation that enables us to approximately minimise the negative log-likelihood of the observed variable $\mathbf{x}$. For completeness, the loss with transformative parameters $\omega$ yields only a minor modification to Equation \ref{eq:optimal_elbo_no_parameters} and is given by:
 \begin{align}
       p_\theta(\mathbf{x}) \le \tilde{\mathcal{L}}_{\mathrm{ELBO}}(\mathbf{h}_\omega(\mathbf{x})) - \sum_{i=1}^D \log \left(\frac{\partial h_\omega(x_i)}{\partial x_i}\right)\label{eq:optimal_elbo_parameters}
 \end{align}
@@ -1228,11 +1230,15 @@ Importantly, for both of these solutions, we did not conduct any systematic hype
 
 \subsection{Evaluation of the Learnt Transformation}
 
-To evaluate the performance of our model with the learnt transformation, we primarily focus our analysis against benchmarks set by the square-root-transformation model since it outperformed our no-transformation model by most measures. As with the other models, one area of our focus is the model's ability to generate samples wherein the frequency of individual precipitation events is close to the true frequency of those events. We thus compare the quantiles above the dry threshold of the samples generated by our learnt-transformation model against those generated by our model trained with the square-root transformation. Notably, up to the 0.999th quantile, samples generated by our model that learnt its transformation are closer to the target than those from the square-root transformation, as shown in Figure \ref{fig:learnt_transform_vs_sqrt_qq}. The superior performance in this respect suggests that enabling our model to learn its transformation enables it to learn the frequency of most precipitation events more accurately. However, we cannot definitively say that either model has more effectively learnt the frequency of heavier precipitation events, corresponding to quantiles above 0.999. As evident from Figure \ref{fig:learnt_transform_vs_sqrt_qq}, neither model is consistently closer to the target for all quantiles. In one respect, this only represents approximately 0.1\% of precipitation events in our dataset. However, as mentioned previously, performing closer to the target in this region may be more desirable in certain use cases---for example, flood forecasting.
+To evaluate the performance of our model with the learnt transformation, we primarily focus our analysis against benchmarks set by the square-root-transformation model since it outperformed our no-transformation model by most measures.
+
+Notably, samples generated via our learnt-transformation model better capture the true frequency of individual precipitation events for most intensities observed in the test set, as evident from Figure \ref{fig:learnt_transform_vs_sqrt_histogram}. In particular, our learnt-transformation model outperforms our square-root-transformation model in every one-millimetre-per-hour interval up to six millimetres-per-hour. Due to the skewed distribution of precipitation, this represents all but the 0.01\% most intense precipitation, as evident from the QQ plot in Figure \ref{fig:learnt_transform_vs_sqrt_qq}. Beyond this region, our learnt-transformation model similarly excels at capturing precipitation events with intensities of 10--26 millimetres per hour, with a 15\% absolute reduction on average in the relative discrepancy in frequency compared to our square-root-transformation model. In all other regions, the dominance of either model is less clear.
 
 \begin{figure}[htbp]
       \centering
       \includegraphics[width=\textwidth]{learnt_transform_vs_sqrt_histogram.png}
+      \caption{Distribution of precipitation rates in samples generated via our learnt-transformation model compared to samples generated via our square-root-transformation model and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram}.}
+      \label{fig:learnt_transform_vs_sqrt_histogram}
 \end{figure}
 
 \begin{figure}[htbp]
@@ -1242,25 +1248,25 @@ To evaluate the performance of our model with the learnt transformation, we prim
       \label{fig:learnt_transform_vs_sqrt_qq}
 \end{figure}
 
-% \begin{figure}[htbp]
-%       \centering
-%       \begin{subfigure}{0.49\textwidth}
-%             \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_histogram_low.png}
-%             \caption{Below 0.3 millimetres per hour}
-%             \label{fig:learnt_transform_vs_sqrt_histogram_low}
-%       \end{subfigure}
-%       \begin{subfigure}{0.49\textwidth}
-%             \includegraphics[width=\linewidth]{learnt_transform_vs_sqrt_histogram.png}
-%             \caption{Full distribution}
-%             \label{fig:learnt_transform_histogram_high}
-%       \end{subfigure}
-%       \caption{Distribution of precipitation rates in samples generated via our model that learnt its transformation, compared to both samples generated via our model trained with the square transformation and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_histogram}.}
-%       \label{fig:learnt_transform_histogram}
-% \end{figure}
+Figure \ref{fig:learnt_transform_bias} depicts the mean-normalised bias at each $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ subarea in samples generated via our learnt-transformation model. We observe a remarkable improvement in the mean-normalised bias in almost all subareas compared to that of the square-root transformation model in Figure \ref{fig:sqrt_bias}. We attribute this improvement to the decreased overrepresentation of precipitation events below one millimetre per hour, which account for approximately 97\% of all events in our test set. As a direct result, our learnt-transformation model equally lessens the underrepresentation of higher precipitation events. Thus, the mean precipitation intensity in the generated samples is significantly higher in almost all subareas. 
 
-% While the dominance of either model may be context-dependent in terms of the frequency of individual precipitation events, when it comes to learning the spatial and temporal characteristics of precipitation, our model that learnt its transformation decisively outperformed the square root transformation. As evident in Figure \ref{fig:learnt_transform_vs_sqrt_psd_spatial}, at all scales, our learnt transformation was closer 
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.5\textwidth]{learnt_transform_bias.png}
+      \caption{Mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated via our learnt-transformation model.}
+      \label{fig:learnt_transform_bias}
+\end{figure}
 
-Although the dominance of each model may be context-dependent regarding the frequency of individual precipitation events, our study demonstrates that our model employing the learnt transformation outperforms consistently in terms of the power in its samples. More specifically, at any given temporal or spatial resolution, the power in samples produced via our learnt-transformation model is closer to the power in the test set from UKCP18 than those produced via the square-root transformation. The dominance of the learnt transformation is evident in Figure \ref{fig:learnt_transform_vs_sqrt_psd}; the learnt transformation notably outperforms the square-root transformation at low spatial scales. The consistent outperformance across all scales suggests that enabling the model to learn its transformation empowers it to learn precipitation's spatial and temporal characteristics more effectively.
+Interestingly, we observe a notable positive linear association---characterised by a coefficient of determination of 0.59---between the mean-normalised bias of a given subarea in samples generated via our no-transformation model and those generated via our square-root transformation model, as evident from the scatter plot in Figure \ref{fig:learnt_transform_vs_sqrt_bias_scatter}. Similar to our square-root-transformation model, our learnt-transformation model exhibits particularly pronounced bias in Central England, East of England, London and South East England. This association stands in contrast to the absence of any discernible relationship between the mean-normalised bias of a given subarea in samples generated via our square-root-transformation model and those generated via our learnt-transformation model. The contrasting associations potentially warrant further exploration in future work to gain a deeper understanding of the underlying causes and potential implications of different transformation techniques on model performance.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=.5\textwidth]{learnt_transform_vs_sqrt_bias_scatter.png}
+      \caption{Relationship between the mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated via our square-root-transformation model and our learnt-transformation model. The horizontal axis is the mean-normalised bias for the square-root transformation; the vertical axis is the mean-normalised bias for the learnt transformation. The black line shows linear regression with a coefficient of determination of $R^2 = 0.59$.}
+      \label{fig:learnt_transform_vs_sqrt_bias_scatter}
+\end{figure}
+
+Although the dominance of our learnt-transformation model is not absolute regarding capturing the distribution of individual precipitation events, our study demonstrates that it consistently outperforms in terms of the power in its generated samples. At any given temporal or spatial resolution, the power in samples produced via our learnt-transformation model is closer to the power in our test set from UKCP18 than those produced via our square-root-transformation model, as evident in Figure \ref{fig:learnt_transform_vs_sqrt_psd}. The power at each scale is, on average, 50\% lower in samples generated via the square-root transformation model in both the spatial and temporal dimensions. For our learnt-transformation model, the discrepancy reduces to 45\%, an absolute reduction of 5\%. These improvements suggest that enabling the model to learn its transformation empowers it to learn precipitation's spatial and temporal characteristics more effectively.
 
 \begin{figure}[htbp]
       \centering
@@ -1278,33 +1284,7 @@ Although the dominance of each model may be context-dependent regarding the freq
       \label{fig:learnt_transform_vs_sqrt_psd}
 \end{figure}
 
-
-
-We observe a particular improvement in the mean-normalised bias in almost all $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ subareas. Mean-normalised bias is the sample mean subtracted by the target mean divided by the target mean. As such, it provides a strong indication as to whether 
-
-
-Figure \ref{fig:learnt_transform_bias} depicts the mean-normalised bias at each area for samples produced via our learnt-transformation model.
-
-The superior performance of our model that learnt its transformation is most evident from Figure \ref{fig:learnt_transform_bias}, which depicts the mean-normalised bias at each cell representing the same geographical area over time and all samples. The plots indicate the degree to which the models capture the true amount of precipitation over different geographical areas. For almost all $8.8\ \mathrm{km}\times 8.8 \mathrm{km}$ subareas, the mean-normalised bias 
-
-\begin{figure}[htbp]
-      \centering
-      \includegraphics[width=.5\textwidth]{learnt_transform_bias.png}
-      \caption{Mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated via our model that learnt its transformation.}
-      \label{fig:learnt_transform_bias}
-\end{figure}
-
-\begin{figure}[htbp]
-      \centering
-      \includegraphics[width=.5\textwidth]{learnt_transform_vs_sqrt_bias_scatter.png}
-      \caption{Relationship between the mean-normalised bias at each cell representing the same $8.8\ \mathrm{km}\times 8.8\ \mathrm{km}$ geographical area in the samples generated via our square-root-transformation model and our learnt-transformation model. The horizontal axis is the mean-normalised bias for the square-root transformation; the vertical axis is the mean-normalised bias for the learnt transformation. The black line is $y=x$; points above the line indicate that the mean-normalised bias for the learnt-transformation model is lower than for the square-root-transformation model.}
-      \label{fig:learnt_transform_vs_sqrt_bias_scatter}
-\end{figure}
-
-
-
-
-\subsection{Samples}
+Our analysis demonstrates that our learnt-transformation model consistently outperforms the square-root-transformation model in several key aspects. These aspects include capturing the true frequency of individual precipitation events for most intensities, reducing the mean-normalised bias in generated samples, and offering better power across the spatial and temporal domains at all scales. We attribute the improved performance to the ability of the learnt-transformation model to learn a suitable transformation for the given data. Moreover, the adaptability of our approach holds potential for generalisation to different distributions---not limited to precipitation---thus offering a flexible and powerful solution for enhancing the performance of diffusion models across various potential applications. Although the dominance of our leant-transformation model is not absolute, we believe the overall improvements warrant further exploration and refinement in future work.
 
 \begin{figure}[htbp]
       \centering
@@ -1330,7 +1310,9 @@ The superior performance of our model that learnt its transformation is most evi
 
 \section{Temporal Interpolation}
 
-In Section \ref{sec:background_diffusion_reconstruction_guided_sampling}, we introduced the notion of deriving a conditional diffusion model approximately from an unconditional model by employing reconstruction-guided sampling \cite{VDM_Ho}. In this section, we illustrate how this method can facilitate \textit{temporal interpolation}: the generation of unknown hourly precipitation samples that maintain temporal coherency with adjacent samples at a lower temporal resolution. Specifically, we showcase the generation of hourly precipitation samples that exhibit temporal coherence with adjacent samples at a two-hour temporal resolution. 
+In Section \ref{sec:background_diffusion_reconstruction_guided_sampling}, we introduced reconstruction-guided sampling \cite{VDM_Ho} as a technique for deriving a conditional diffusion model approximately from an unconditional model. In this section, we employ this method to facilitate \textit{temporal interpolation}: the generation of intermediate samples between known samples in a sequence. The critical contribution of this section lies in demonstrating the potential of reconstruction-guided sampling to facilitate the generation of hourly precipitation samples that maintain coherency with adjacent samples of a bi-hourly temporal resolution. We emphasise the crucial role of the reconstruction-guidance weighting in achieving this goal.
+
+Temporal interpolation of precipitation holds the potential to significantly benefit numerous real-world applications, such as the generation of high-resolution climate simulations. Despite being a relatively new addition to the modelling tools available for climate change simulations, high-resolution CPMs have empowered critical discoveries that coarser simulations failed to capture, including a substantial future increase in hourly precipitation extremes in the UK's summers \cite{Kendon_Heavier_Summer_Downpours}. However, the substantial computational cost required to generate CPM simulations hinders their widespread deployment \cite{MO_CPM}. Developing efficient interpolation techniques has the potential to mitigate this issue by facilitating the generation of high-resolution climate simulations via a two-step process: first, producing lower temporal resolution data, and second, interpolating to the desired temporal resolution. Naturally, the advantages of this approach depend on two key factors: first, confirming that the cost of the subsequent interpolation procedure does not negate the computational savings achieved through the initial generation of lower temporal resolution data, and second, the efficacy of the interpolation method in preserving the coherence of the interpolated samples. In this work, however, our primary focus lies on the latter: offering a proof of concept for temporal interpolation in the context of precipitation data while deferring a formal analysis of the computational cost trade-offs to future research.
 
 \begin{figure}[htbp]
       \centering
@@ -1350,12 +1332,38 @@ In Section \ref{sec:background_diffusion_reconstruction_guided_sampling}, we int
             \caption{Temporal Dimension}
             \label{fig:interpolate_psd_temporal}
       \end{subfigure}
-      \caption{PSD graphs for samples generated via our model trained with the square root transformation, our model that learnt its transformation, and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_psd}.}
+      \caption{PSD graphs for samples generated via our learnt-transformation model with different reconstruction-guidance weights and the test set from UKCP18. The format is the same as Figure \ref{fig:no_transform_psd}.}
       \label{fig:interpolate_psd}
 \end{figure}
 
+\begin{figure}[htbp]
+      \centering
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{interpolate_real.png}
+            \caption{True Sample}
+            \label{fig:interpolate_sample_real}
+      \end{subfigure}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{interpolate_wr_0.png}
+            \caption{$w_r=0$}
+            \label{fig:interpolate_sample_wr_0}
+      \end{subfigure}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{interpolate_wr_1k.png}
+            \caption{$w_r=10^3$}
+            \label{fig:interpolate_sample_wr_1k}
+      \end{subfigure}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{interpolate_wr_1m.png}
+            \caption{$w_r=10^6$}
+            \label{fig:interpolate_sample_wr_1m}
+      \end{subfigure}
+      \caption{Temporally interpolated samples generated via our learnt-transformation model. Figure \ref{fig:interpolate_sample_real} depicts the true sample, with the hourly snapshots conditioned on highlighted in red. The three subsequent figures depict samples generated with different reconstruction-guidance weights; captions below each figure indicate the reconstruction-guidance weight $w_r$. Ideally, each hourly snapshot should be identical, or very similar, to the corresponding true snapshot in Figure \ref{fig:interpolate_sample_real}. The format of each hourly snapshot is the same as Figure \ref{fig:no_transform_sample}.}
+      \label{fig:interpolate_sample}
+\end{figure}
 
-Temporal interpolation of precipitation data could facilitate many real-world applications. Consider a scenario wherein a region only has precipitation data at a low temporal resolution. With the proposed method, it would be possible to generate hourly precipitation samples that maintain temporal coherency with the existing two-hour interval data. By interpolating the data to a finer temporal resolution, meteorologists, hydrologists, and other professionals could improve their understanding of local climate patterns and thus improve their flood forecasting and management abilities.
+
+
 
 \section{Forecasting}
 

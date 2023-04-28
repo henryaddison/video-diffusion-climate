@@ -51,13 +51,14 @@ def inverse_tensor(y_tensor):
 if torch.cuda.is_available():
     diffusion = diffusion.cuda()
 
-indices_a = [0, 2, 4, 6, 8]
+indices_a = [0, 1, 2, 3, 4]
 
-samples = torch.empty(0, 1, 10, 64, 64)
+# samples = torch.empty(0, 1, 10, 64, 64)
+samples = torch.load(f"/user/home/cj19328/predict.pt")
 
 BATCH_SIZE = 16
 
-index = 0
+index = 14720
 while True:
     x_orig = torch.from_numpy(xr.open_dataset("/user/work/cj19328/train_test/test.nc").pr.isel(time=range(index, index + 10 * BATCH_SIZE)).values.reshape(-1, 1, 10, 64, 64))
     x_a = x_orig[:, :, indices_a].cuda()
@@ -71,7 +72,7 @@ while True:
     x_cond_sample = diffusion.sample_recon_guidance(x_a, indices_a)
     x_cond_sample = inverse_tensor(x_cond_sample)
     samples = torch.cat([samples, x_cond_sample], dim = 0)
-    torch.save(samples, f"/user/home/cj19328/cond_sample.pt")
+    torch.save(samples, f"/user/home/cj19328/predict.pt")
 
     index += 10 * BATCH_SIZE
 
@@ -101,8 +102,8 @@ while True:
 # samples = torch.zeros(0, 1, 100, 64, 64)
 
 
-# BATCH_SIZE = 4
-# LENGTH = 1000
+# BATCH_SIZE = 16
+# LENGTH = 100
 
 # # Since recon-guidance can only take a match batch size of 16, we need to multiple iterations
 # for _ in range(10):

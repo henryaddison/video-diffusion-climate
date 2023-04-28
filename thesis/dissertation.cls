@@ -102,7 +102,7 @@
 
 % configure style of bibliography
 
-\bibliographystyle{plain}
+\bibliographystyle{plainurl}
 
 % configure style of pages
 
