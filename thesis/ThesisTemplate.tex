@@ -1361,6 +1361,12 @@ As demonstrated by Figure \ref{fig:interpolate_histogram} and Figure \ref{fig:in
 
 By employing a reconstruction-guidance weight of $w_r=10^6$, we obtain a distribution closely resembling the observed distribution of the corresponding withheld samples from the test set. We can regard the limitations observed in the interpolated samples generated with a low reconstruction-guidance weighting as accentuated manifestations of the shortcomings inherent in our unconditional model. Specifically, samples generated in the unconditional setting tend to underrepresent the probability of more intense precipitation, a problem mirrored and magnified in the interpolated samples generated under a low reconstruction-guidance weighting. Intriguingly, utilising a sufficiently large reconstruction-guidance weight effectively mitigates these issues, resulting in interpolated samples that better represent the probability of more intense precipitation.
 
+In examining the spatial characteristics of the interpolated samples, we observe a similar trend, as illustrated in Figure \ref{fig:interpolate_psd_spatial}. Notably, interpolated samples generated with a reconstruction-guidance weight of $w_r=0$ or $w_r=10^3$ exhibit power in the spatial dimensions that significantly deviates from the corresponding withheld samples in the test set. In contrast, when utilising a reconstruction-guidance weight of $w_r=10^6$, the power in the spatial dimensions of the interpolated samples closely aligns with that of the corresponding withheld samples.
+
+The temporal PSD graph in Figure \ref{fig:interpolate_psd_temporal} further supports this trend, reinforcing the inadequacy of lower reconstruction-guidance weightings. We observe that the interpolated samples generated with a lower weighting have significantly too much power at the lowest temporal scales, attributable to the deviation in the distribution of individual precipitation intensities. More specifically, due to the substantial deviation in the distribution of individual intensities, the interpolated samples bear little resemblance to their adjacent samples, resulting in a high power at the most minute temporal scales. However, when employing a reconstruction-guidance weight of $w_r=10^6$, the temporal PSD graph of the interpolated samples is remarkably similar to that of the corresponding withheld samples. The most pronounced deviation similarly occurs at the lowest temporal scale, albeit to a significantly lesser extent.
+
+Figure \ref{fig:interpolate_sample} further underscores the critical role of the reconstruction-guidance weighting by visually representing a single interpolated sample generated with different weightings; only the hourly samples generated with a weight of $w_r=10^6$ exhibit a resemblance to the corresponding withheld samples from the test set.
+
 \begin{figure}[htbp]
       \centering
       \begin{subfigure}{.49\textwidth}
@@ -1403,19 +1409,20 @@ By employing a reconstruction-guidance weight of $w_r=10^6$, we obtain a distrib
       \label{fig:interpolate_sample}
 \end{figure}
 
-
-
+In summary, this section establishes the potential for generating interpolated samples with a distribution of individual intensities and spatiotemporal characteristics that closely resemble the corresponding withheld samples from the test set, achieved by employing an adequate reconstruction-guidance weighting. The discrepancies observed between the interpolated and corresponding withheld samples are considerably less pronounced than those observed in the unconditional setting, making the results particularly encouraging. Despite the model's inherent limitations in the unconditional context, a substantial reconstruction-guidance weighting allows the same unconditional model to generate interpolated samples that overcome these limitations.
 
 \section{Nowcasting}
 \label{sec:results_nowcasting}
 
-\section{Autoregressive Generation of Longer Sequences}
+Following the successful application of reconstruction-guided sampling for temporal interpolation, as demonstrated in the previous section, we extend our study to its potential applicability for nowcasting. This section presents preliminary proof-of-principle results for using a diffusion model to generate nowcasts.
 
-One of the primary limitations of our current model is a constraint on the length of our generated samples, which is limited to ten hours. This limitation stems from the fact that the generated samples possess the same dimensionality as the training data; in the temporal dimension, this corresponds to only ten hours.
+% \section{Autoregressive Generation of Longer Sequences}
 
-To address this issue, we provide initial results for using reconstruction-guided sampling to facilitate the autoregressive generation of arbitrarily long samples. In this respect, we generate the next set of samples by conditioning on the previous set of samples.
+% One of the primary limitations of our current model is a constraint on the length of our generated samples, which is limited to ten hours. This limitation stems from the fact that the generated samples possess the same dimensionality as the training data; in the temporal dimension, this corresponds to only ten hours.
 
-This autoregressive strategy enables the creation of arbitrarily long samples, thus overcoming the inherent constraints of the unconditional diffusion model.
+% To address this issue, we provide initial results for using reconstruction-guided sampling to facilitate the autoregressive generation of arbitrarily long samples. In this respect, we generate the next set of samples by conditioning on the previous set of samples.
+
+% This autoregressive strategy enables the creation of arbitrarily long samples, thus overcoming the inherent constraints of the unconditional diffusion model.
 
 % -----------------------------------------------------------------------------
 
