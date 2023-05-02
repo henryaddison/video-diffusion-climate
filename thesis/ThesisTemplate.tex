@@ -131,7 +131,7 @@
 
 \tableofcontents
 \listoffigures
-\listoftables
+% \listoftables
 
 % -----------------------------------------------------------------------------
 
@@ -254,6 +254,34 @@ This project did not require ethical review, as determined by my supervisor Dr L
 
 \chapter{Introduction}
 \label{chap:introduction}
+
+\section{Problem Overview}
+
+Climatological data is of paramount importance in the modern world. Driven by the increasingly evident manifestations of climate change, the need for reliable simulations based on emissions scenarios has become increasingly pressing to guide those striving to mitigate the consequences and formulate policies to shape our planet's future. The impact of climatological data extends beyond future projections: nowcasting currently supports real-world socioeconomic needs in various sectors reliant on weather-dependent decision-making \cite{Wilson_Nowcasting_Challenges}.
+
+Despite the importance of climatological data, challenges persist in both domains. High-resolution climate simulations---essential for representing critical features such as hourly rainfall characteristics and assessing the risk of life-threatening events like localised-flash flooding---are too computationally expensive. The computational burden poses a significant barrier to their widespread deployment \cite{MO_CPM}. Meanwhile, in the nowcasting domain, state-of-the-art operational techniques typically utilise radar-based wind estimates to advect precipitation fields, which struggle to capture non-linear events such as convective initiation and heavy precipitation \cite{Ravuri_Skillful_Precipitation_Nowcasting}.
+
+Recent advancements in generative artificial intelligence provide a promising route to alleviate these challenges. Within the computer-vision domain, diffusion models \cite{Deep_Unsupervised_Learning_Sohl-Dickstein, DDPM_Ho, Score_Based_Song} have outperformed previous state-of-the-art models---typically generative adversarial networks (GANs) \cite{Goodfellow_Generative_Adversarial_Networks}---in various tasks, including text-to-image synthesis \cite{Ramesh_Zero-Shot_Text-to-Image_Generation,Rombach_High-Resolution_Image_Synthesis_with_Latent_Diffusion_Models,Imagen_Saharia}, image inpainting \cite{Score_Based_Song,Lugamyr_RePaint} and image superresolution \cite{Saharia_Image_Super-Resolution_via_Iterative_Refinement,Cascaded_Ho}. In the climate simulations domain, diffusion models have successfully downscaled high-resolution precipitation samples with realistic spatial structures based on low-resolution inputs \cite{Addison_Machine_Learning_Emulation}, thereby presenting a promising method to reduce computational costs. However, diffusion models capable of downscaling currently operate on daily mean snapshots, potentially neglecting critical information in time-evolving data at a higher temporal resolution, such as the strong autocorrelation inherent in precipitation and capturing hourly peaks \cite{MO_RCP_Guidance}.
+
+Researchers have recently adapted diffusion models to the video domain \cite{VDM_Ho, Imagen_Video_Ho}, making significant strides towards generating temporally-coherent high-fidelity video. In this work, we build upon these advancements by adopting techniques from video diffusion models to generate time-evolving precipitation fields.
+
+\section{Aims and Ojectives}
+
+We summarise the aims and objectives of this work as follows:
+\begin{itemize}
+      \item To leverage techniques employed in video diffusion models to develop a diffusion model capable of unconditionally generating time-evolving precipitation fields; and to provide a comprehensive assessment of the model's capabilities and limitations.
+      \item To devise methods to address any identified limitations and evaluate the efficacy of these approaches.
+      \item To extend the diffusion model for conditional generation in order to enhance the temporal resolution of existing time-evolving precipitation simulations, thus demonstrating initial proof-of-principle of the capacity for diffusion models to decrease the computational cost of time-evolving high-resolution climate simulations.
+      \item To provide preliminary results for nowcasting, aiming to encourage future research in this area. As the current state-of-the-art generative model for nowcasting is a GAN \cite{Ravuri_Skillful_Precipitation_Nowcasting}, we hypothesise that a well-optimised diffusion model will present a more optimal solution, reflecting accomplishments observed in the computer-vision domain.
+\end{itemize}
+
+% We summarise the contributions of this work as follows:
+% \begin{itemize}
+%       \item We provide proof-of-principle results for a diffusion model's capacity to generate time-evolving precipitation fields.
+%       \item We demonstrate the importance of selecting a suitable transformation of the input data on the quality of the generated samples. In this vein, we propose a novel loss function that enables the diffusion model to jointly optimise its generative parameters and the transformation applied to the input data.
+%       \item We demonstrate the efficacy of reconstruction-guided sampling \cite{VDM_Ho} for temporal interpolation; using an unconditional diffusion model, we derive a conditional diffusion model that can generate hourly precipitation snapshots that maintain coherence with adjacent samples of a bi-hourly temporal resolution. We emphasise the necessity of a suitably high reconstruction-guidance weight to attain this objective.
+%       \item We provide preliminary findings in the nowcasting domain, aiming to encourage future research in this area. Given that the current state-of-the-art generative model for nowcasting is a GAN \cite{Ravuri_Skillful_Precipitation_Nowcasting}, we postulate that a well-optimised diffusion model will present a more optimal solution, mirroring the accomplishments observed in the computer-vision domain.
+% \end{itemize}
 
 \chapter{Technical Background}
 \label{chap:background}
@@ -504,9 +532,6 @@ Importantly, we accomplish this without training a model to directly approximate
 \section{Diffusion Models}
 \label{sec:background_diffusion}
 
-\subsection{Overview}
-\label{sec:background_diffusion_overview}
-
 Diffusion models \cite{Deep_Unsupervised_Learning_Sohl-Dickstein,DDPM_Ho,Score_Based_Song} are a framework for generative modelling. Diffusion models consist of a \textit{forward diffusion process} that transforms a datapoint into noise, and a \textit{reverse-time generative model} able to transform noise back into a datapoint. As we explore in this section, diffusion models have both likelihood and score-based interpretations.
 
 \subsection{Forward Diffusion Process}
@@ -676,7 +701,7 @@ where $S$ is the sigmoid function. Figure \ref{fig:cosine_alpha_sigma} visualise
       \label{fig:cosine_alpha_sigma}
 \end{figure}
 
-We can, in theory, use two different noise schedules: one to train the model and another to generate new samples. During training, the noise schedule affects the variance of the gradients \cite{Understanding_Diffusion_Objective_Kingma}. During generation, we typically want to use a noise schedule that optimises the quality of the generated samples. However, in this work, we use the truncated continuous-time $\alpha$-cosine schedule for training and generation, as we found it to provide empirically good results for both. During training, we sampling $t\sim\mathcal{U}(0,1)$ uniformly at random, then compute $\lambda=f_\Lambda(t)$, which equates to sampling $\lambda\sim p_\Lambda(\lambda)$, where $p_\Lambda(\lambda)$ is the probability density function for the truncated continuous-time $\alpha$-cosine schedule, and given by:
+We can, in theory, use two different noise schedules: one to train the model and another to generate new samples. During training, the noise schedule affects the variance of the gradients \cite{Understanding_Diffusion_Objective_Kingma}. During generation, we typically want to use a noise schedule that optimises the quality of the generated samples. However, in this work, we use the $\alpha$-cosine schedule for training and generation, as we found it to provide empirically good results for both. During training, we sampling $t\sim\mathcal{U}(0,1)$ uniformly at random, then compute $\lambda=f_\Lambda(t)$, which equates to sampling $\lambda\sim p_\Lambda(\lambda)$, where $p_\Lambda(\lambda)$ is the probability density function for the $\alpha$-cosine schedule, and given by:
 \begin{align}
       p_\Lambda(\lambda)=\frac{1}{2\pi(t_1-t_0)}\mathrm{sech}\left(\frac{\lambda}{2}\right)
 \end{align}
@@ -705,44 +730,50 @@ Figure \ref{fig:p_lambda} displays the probability density function.
 \subsection{Parameterisations}
 \label{sec:background_diffusion_parameterisations}
 
-In Section \ref{sec:background_diffusion_reverse}, we defined our generative model $p_\theta(\mathbf{x})$ using $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$, which takes as input some noisy latent variable $\mathbf{z}_t$ and a log signal-to-noise ratio $\lambda_t$ and outputs a denoised estimate of the latent. Training a neural network to predict $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t, \lambda_t)$ directly is referred to as the $\mathbf{x}$-prediction parameterisation, but is seldom adopted in the broader literature due to sub-optimal results \cite{DDPM_Ho}. Recent diffusion models have instead adopted different parameterisations, most commonly the $\boldsymbol\epsilon$-prediction parameterisation (see e.g. \cite{DDPM_Ho,Cascaded_Ho,Imagen_Saharia}), wherein a neural network is instead trained to predict the noise $\boldsymbol\epsilon\approx\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)$, from which we can compute a denoised estimate of noisy latent $\mathbf{z}_t$ via:
+In Section \ref{sec:background_diffusion_reverse}, we defined our reverse-time generative model $p_\theta(\mathbf{x})$ in terms of a denoiser network $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$. The network takes as input some noisy latent variable $\mathbf{z}_t$ and a log signal-to-noise ratio $\lambda_t$ and subsequently outputs a denoised estimate of the latent. Training a neural network to predict $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t, \lambda_t)$ directly is referred to as the $\mathbf{x}$-prediction parameterisation, but is seldom adopted in the broader literature due to sub-optimal sample quality \cite{DDPM_Ho}. Recent diffusion models instead typically adopted different parameterisations, most commonly the $\boldsymbol\epsilon$-prediction parameterisation (see e.g. \cite{DDPM_Ho,Cascaded_Ho,Imagen_Saharia}). In this framework, we instead train a neural network to predict the noise $\boldsymbol\epsilon\approx\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)$, from which we can compute a denoised estimate of noisy latent $\mathbf{z}_t$ via the relationship:
 \begin{align}
       \hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)=\frac{1}{\alpha_t}\left(\mathbf{z}_t-\sigma_t\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t, \lambda_t)\right)
 \end{align}
-In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (see e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was introduced initially to facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}. Namely, faster convergence of sample quality and prevention of temporal colour shifting observed with $\boldsymbol\epsilon$-prediction video diffusion models. 
+In practice, the differences in sample quality that arise from employing different parameterisations are due to the various loss functions employing different implicit weighting functions; we explore this in more detail in Section \ref{sec:background_diffusion_weighted_loss}.
 
-Formally, for a given datapoint $\mathbf{x}\sim q(\mathbf{x})$  we define the velocity of $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ as:
+In this work, we employ the $\mathbf{v}$-prediction parameterisation, introduced originally by Salimans and Ho \cite{Progressive_Distillation_Salimans}, and commonly employed in video diffusion models (see e.g. \cite{VDM_Ho,Imagen_Video_Ho}). The $\mathbf{v}$-prediction parameterisation was introduced initially to facilitate progressive distillation for faster sampling, though we utilise it here for its additional benefits highlighted by Ho et al. \cite{Imagen_Video_Ho}. Namely, faster convergence of sample quality and prevention of temporal colour shifting observed with $\boldsymbol\epsilon$-prediction video diffusion models. Let $\psi$ be:
 \begin{align}
-      \mathbf{v}_t=\alpha_t\boldsymbol\epsilon - \sigma_t\mathbf{x}
+      \psi = \arctan\left(\frac{\sigma_t}{\alpha_t}\right)=\frac{\pi}{2}(t_0+t(t_1-t_0))
 \end{align}
-where $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise. We train our neural network $\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ to minimise the following loss function, defined per datapoint $\mathbf{x}$ as:
+Formally, for a given datapoint $\mathbf{x}$, we define the velocity of latent $\mathbf{z}_t$ as:
+\begin{align}
+      \mathbf{v}_t=\frac{d\mathbf{z}_t}{d\psi}&=\cos(\psi)\boldsymbol\epsilon-\sin(\psi)\mathbf{x}\\
+      &=\alpha_t\boldsymbol\epsilon -\sigma_t\mathbf{x}
+\end{align}
+where $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0}, \mathbf{I})$ is multivariate standard Gaussian noise. We train our neural network $\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ to predict $\mathbf{v}_t$ by minimising the following loss function, defined per datapoint $\mathbf{x}$ as:
 \begin{align}
       \mathbb{E}_{\lambda\sim p_\Lambda(\lambda),\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})}\left[\Vert\mathbf{v}_t-\hat{\mathbf{v}}_\theta(\mathbf{z}_t, \lambda_t)\Vert_2^2\right]\label{eq:v_parameterisation_loss}
 \end{align}
-During discrete-time ancestral sampling, we convert our estimate $\mathbf{v}_t\approx\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ into an estimate of the denoised latent $\mathbf{x}\approx\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$ via:
+We can trivially convert our estimate of the velocity $\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)$ into an estimate of the denoised latent $\hat{\mathbf{x}}_\theta(\mathbf{z}_t,\lambda_t)$, an estimate of the noise $\hat{\boldsymbol\epsilon}_\theta(\mathbf{z}_t,\lambda_t)$, or an estimate of the score $\hat{\mathbf{s}}_\theta(\mathbf{z}_t,\lambda_t)$ due to the following relationships:
 \begin{align}
-      \hat{\mathbf{x}}(\mathbf{z}_t,\lambda_t)=\alpha_t\mathbf{z}_t-\sigma_t\hat{\mathbf{v}}_\theta(\mathbf{z}_t,\lambda_t)
+      \mathbf{x}&=\alpha_t\mathbf{z}_t-\sigma_t\mathbf{v}_t\\
+      \boldsymbol\epsilon&=\sigma_t\mathbf{z}_t+\alpha_t\mathbf{v}_t\\
+      \nabla_{\mathbf{z}_t}q(\mathbf{z}_t)&=-\mathbf{z}_t-\frac{\alpha_t}{\sigma_t}\mathbf{v}_t
 \end{align}
-Appendix \ref{appx:diffusion_v_prediction_parameterisation} provides further details on the $\mathbf{v}$-prediction parameterisation, including derivations of the velocity and denoised latent.
 
-\subsection{Score-Based Interpretation}
+% \subsection{Score-Based Interpretation}
 
-Suppose we have a multivariate Gaussian variable with mean $\boldsymbol\mu$ and covariance $\boldsymbol\Sigma$:
-\begin{align}
-      \mathbf{z}\sim p(\mathbf{z})=\mathcal{N}(\mathbf{z}; \boldsymbol\mu_{\mathbf{z}}, \boldsymbol\Sigma_{\mathbf{z}})
-\end{align}
-Tweedie's formula states that:
-\begin{align}
-\mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}}|\mathbf{z}\right]=\mathbf{z}+\boldsymbol\Sigma_{\mathbf{z}} \nabla_{\mathbf{z}}\log p(\mathbf{z})
-\end{align}
-As such, for a given latent $\mathbf{z}_t\sim\mathcal{N}(\mathbf{z}_t; \alpha_t\mathbf{x}, \sigma_t^2\mathbf{I})$, the expected value of the mean $\boldsymbol{\mu}_{\mathbf{z}_t}$ given $\mathbf{z}_t$ is given by:
-\begin{align}
-      \mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}_t}|\mathbf{z}_t\right]=\mathbf{z}_t+\sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
-\end{align}
-From Equation \ref{eq:q_z_t_given_x}, we have $\boldsymbol\mu_{\mathbf{z}_t}=\alpha_t\mathbf{x}$. Thus, we can reformulate the score of $q(\mathbf{z}_t)$ in terms of $\mathbf{z}_t$ and $\mathbf{x}$ as:
-\begin{align}
-      \alpha_t\mathbf{x}=\mathbf{z}_t + \sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
-\end{align}
+% Suppose we have a multivariate Gaussian variable with mean $\boldsymbol\mu$ and covariance $\boldsymbol\Sigma$:
+% \begin{align}
+%       \mathbf{z}\sim p(\mathbf{z})=\mathcal{N}(\mathbf{z}; \boldsymbol\mu_{\mathbf{z}}, \boldsymbol\Sigma_{\mathbf{z}})
+% \end{align}
+% Tweedie's formula states that:
+% \begin{align}
+% \mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}}|\mathbf{z}\right]=\mathbf{z}+\boldsymbol\Sigma_{\mathbf{z}} \nabla_{\mathbf{z}}\log p(\mathbf{z})
+% \end{align}
+% As such, for a given latent $\mathbf{z}_t\sim\mathcal{N}(\mathbf{z}_t; \alpha_t\mathbf{x}, \sigma_t^2\mathbf{I})$, the expected value of the mean $\boldsymbol{\mu}_{\mathbf{z}_t}$ given $\mathbf{z}_t$ is given by:
+% \begin{align}
+%       \mathbb{E}\left[\boldsymbol\mu_{\mathbf{z}_t}|\mathbf{z}_t\right]=\mathbf{z}_t+\sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
+% \end{align}
+% From Equation \ref{eq:q_z_t_given_x}, we have $\boldsymbol\mu_{\mathbf{z}_t}=\alpha_t\mathbf{x}$. Thus, we can reformulate the score of $q(\mathbf{z}_t)$ in terms of $\mathbf{z}_t$ and $\mathbf{x}$ as:
+% \begin{align}
+%       \alpha_t\mathbf{x}=\mathbf{z}_t + \sigma_t^2\nabla_{\mathbf{z}_t}\log q(\mathbf{z}_t)
+% \end{align}
 
 
 \subsection{ELBO for Diffusion Models}
@@ -806,7 +837,7 @@ The likelihood-based interpretation comes from the fact that $\mathcal{L}_\Lambd
 \end{align}
 As such, minimisation of $\mathcal{L}_\Lambda(\lambda)$ equates to maximisation of the expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with noise level $\lambda$. If the weighting function $w(\lambda)$ is a monotonically decreasing function of $\lambda\in [\lambda_{\min}, \lambda_{\max}]$, then by definition $-w'(\lambda)$ will be positive for all $\lambda\in [\lambda_{\min}, \lambda_{\max}]$. In which case, minimisation of $\mathcal{L}_{\mathrm{WL}}$ itself equates to maximisation of the weighted expected log-likelihood of the noise-perturbed data $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ with weighting $-w'(\lambda)$. 
 
-Kingma and Gao's \cite{Understanding_Diffusion_Objective_Kingma} analysis directly justifies our use of the $\mathbf{v}$-prediction parameterisation with the truncated continuous-time $\alpha$-cosine noise schedule. In conjunction, their use equates to the weighted loss with:
+Kingma and Gao's \cite{Understanding_Diffusion_Objective_Kingma} analysis directly justifies our use of the $\mathbf{v}$-prediction parameterisation with the $\alpha$-cosine noise schedule. The $\alpha$-cosine schedule used in conjunction with the $\mathbf{v}$-prediction parameterisation loss function given in Equation \ref{eq:v_parameterisation_loss} equates to the weighted loss with:
 \begin{align}
       w(\lambda)&=\frac{1}{2\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)\\
       -w'(\lambda)&=\frac{1}{4\pi(t_1-t_0)}\exp\left(-\frac{\lambda}{2}\right)
@@ -925,10 +956,10 @@ Writing the reconstruction-guidance method as a conditional denoiser $\hat{\math
       \hat{\mathbf{x}}^{\mathrm{C}}_\theta(\mathbf{z}_t, \lambda_t, \Omega(\mathbf{x}))=\bar\Omega\left(\hat{\mathbf{x}}_\theta([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)], \lambda_t )\right) - \frac{w_r\alpha_t}{2}\nabla_{\bar\Omega(\mathbf{z}_t)} \left\Vert \Omega(\mathbf{x}) - \Omega\left(\hat{\mathbf{x}}_\theta\left([\bar\Omega(\mathbf{z}_t); \Omega(\mathbf{z}_t)]\right)\right)\right\Vert_2^2
 \end{align}
 
-\subsection{U-Net}
+\subsection{3D U-Net}
 \label{sec:background_unet}
 
-
+In this work, our $\mathbf{v}$-prediction model $\mathbf{v}_\theta(\mathbf{z}_t, \lambda_t)$ uses the 3D U-Net architecture from \cite{VDM_Ho}. The 3D U-Net architecture is an extension of the 2D U-Net \cite{Ronneberger_U-Net, Salimans_PixelCNN}, the standard architecture employed in recent work on image modelling. It comprises a spatial downsampling pass followed by a spatial upsampling pass with skip connections to the downsampling pass activations. The network contains layers of space-only 3D convolutional residual blocks \cite{VDM_Ho}, with each block followed by a spatial attention block \cite{Vaswani_Attention_is_All_You_Need, Wang_Non-Local_Neural_Networks, Chen_PixelSNAIL}, which treats the temporal axis as a batch axis. A temporal attention block follows each spatial attention block, performing attention over the temporal axis and treating the two spatial axes as batch axes. This form of factorised space-time attention is known for its computational efficiency \cite{Arnab_ViViT, Bertasius_Is_Space-Time_Attention_All_You_Need, Ho_Axial_Attention_in_Multidimensional_Transformers}.
 
 \chapter{Related Work}
 \label{chap:background_climate}
@@ -942,7 +973,7 @@ As the world's climate evolves rapidly, the need for reliable simulations based 
 
 Climate simulations exist on a spectrum of spatial and temporal resolutions. Global climate models (GCMs), situated at the lower-resolution end of the spectrum, provide spatial resolutions of 60--300 km and demand relatively low computational resources. However, GCMs necessitate parameterisation schemes to represent the average effects of convection, as explicit representation on the grid is impossible \cite{MO_CPM}. This simplification serves as a known source of model error with several associated problems, including deficiencies in the daily timing on convection and an inability to represent hourly extremes \cite{Hanel_Hourly_Precipitation_Extremes, Gregersen_Assessing_Future_Climatic_Changes}.
 
-Conversely, convection-permitting models (CPMs), a specialised type of regional climate model (RCM) situated at the high-resolution end of the spectrum, offer spatial resolutions of typically only a few kilometres and thus enable explicit representation of convective storms \cite{MO_CPM}. CPMs employ realistic physical representations of relevant climate processes, providing significant advantages such as more realistic representation of hourly rainfall characteristics, including extremes, compared to models that run at coarser spatial scales \cite{Kendon_Heavier_Summer_Downpours}. High-resolution simulations of this nature facilitate assessments of future risks for extreme events like localised flash flooding; notably, CPMs have shown a substantial increase in hourly precipitation extremes in the UK's summers, which coarser simulations failed to capture \cite{Kendon_Heavier_Summer_Downpours}. However, the substantial computational cost of CPMs is a barrier to their wider deployment \cite{MO_CPM}.
+Conversely, convection-permitting models (CPMs), a specialised type of regional climate model (RCM) situated at the high-resolution end of the spectrum, offer spatial resolutions of typically only a few kilometres and thus enable explicit representation of convective storms \cite{MO_CPM}. CPMs employ realistic physical representations of relevant climate processes, providing significant advantages such as realistic representation of hourly rainfall characteristics, including extremes, compared to models that run at coarser spatial scales \cite{Kendon_Heavier_Summer_Downpours}. High-resolution simulations of this nature facilitate assessments of future risks for extreme events like localised flash flooding; notably, CPMs have shown a substantial increase in hourly precipitation extremes in the UK's summers, which coarser simulations failed to capture \cite{Kendon_Heavier_Summer_Downpours}. However, the substantial computational cost of CPMs is a barrier to their wider deployment \cite{MO_CPM}.
 
 Machine-learning-based statistical downscaling presents an alternative approach for generating high-resolution simulations with reduced computational costs. These methods utilise machine learning to establish a statistical relationship between lower-resolution climate variables and higher-resolution values. A notable example of such an approach is the work of Doury et al. \cite{Doury_Regional_Climate_Model_Emulator}, who employ a variation of the original U-Net architecture \cite{Ronneberger_U-Net} to emulate an RCM with a 12 km spatial resolution based on GCM inputs for regions in France and Spain. However, deterministic systems like these tend to generate blurry samples \cite{Ravuri_Skillful_Precipitation_Nowcasting} and produce only a single output for each input.
 
@@ -1338,6 +1369,7 @@ Our analysis demonstrates that our learnt-transformation model consistently outp
 % \end{figure}
 
 \section{Temporal Interpolation}
+\label{sec:results_temporal_interpolation}
 
 In Section \ref{sec:background_diffusion_reconstruction_guided_sampling}, we detailed reconstruction-guided sampling \cite{VDM_Ho} as a technique for deriving a conditional diffusion model approximately from an unconditional model. In this section, we employ this method to facilitate \textit{temporal interpolation}: the generation of intermediate samples between known samples in a sequence. The critical contribution of this section lies in demonstrating the potential of reconstruction-guided sampling to facilitate the generation of hourly precipitation samples that maintain coherency with adjacent samples of a bi-hourly temporal resolution. We emphasise the crucial role of the reconstruction-guidance weighting in achieving this goal.
 
@@ -1348,14 +1380,14 @@ As demonstrated by Figure \ref{fig:interpolate_histogram} and Figure \ref{fig:in
 \begin{figure}[htbp]
       \centering
       \includegraphics[width=\linewidth]{interpolate_histogram.png}
-      \caption{Distribution of individual precipitation rates in the conditionally generated interpolated samples, produced by our learnt-transformation model with varying reconstruction-guidance weights, and the observed distribution of corresponding withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_histogram}.}
+      \caption{Distribution of individual precipitation rates in the conditionally generated interpolated samples produced by our learnt-transformation model with varying reconstruction-guidance weights, and the observed distribution of the corresponding withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_histogram}.}
       \label{fig:interpolate_histogram}
 \end{figure}
 
 \begin{figure}[htbp]
       \centering
       \includegraphics[width=\textwidth]{interpolate_qq.png}
-      \caption{QQ plots for individual cells in interpolated samples from 12 randomly selected seasons in the test set from UKCP18 against interpolated samples generated via our model that learnt its transformation. The format is the same as Figure \ref{fig:no_transform_qq}. $\mathcal{Q} = \{1 - 10^{-n_1} + n_2 \cdot 10^{-n_1 - 1}\mid n_1,n_2\in \mathbb{N}, 1 \le n_2 \le 9\}$.}
+      \caption{QQ plot comparing the distribution of individual precipitation rates in the conditionally generated interpolated samples produced by our learnt-transformation model with varying reconstruction-guidance weights against the corresponding observed withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_qq}.}
       \label{fig:interpolate_qq}
 \end{figure}
 
@@ -1392,20 +1424,20 @@ Figure \ref{fig:interpolate_sample} further underscores the critical role of the
       \end{subfigure}
       \begin{subfigure}{\textwidth}
             \includegraphics[width=\linewidth]{interpolate_wr_0.png}
-            \caption{$w_r=0$}
+            \caption{Generated interpolations with $w_r=0$}
             \label{fig:interpolate_sample_wr_0}
       \end{subfigure}
       \begin{subfigure}{\textwidth}
             \includegraphics[width=\linewidth]{interpolate_wr_1k.png}
-            \caption{$w_r=10^3$}
+            \caption{Generated interpolations with $w_r=10^3$}
             \label{fig:interpolate_sample_wr_1k}
       \end{subfigure}
       \begin{subfigure}{\textwidth}
             \includegraphics[width=\linewidth]{interpolate_wr_1m.png}
-            \caption{$w_r=10^6$}
+            \caption{Generated interpolations with $w_r=10^6$}
             \label{fig:interpolate_sample_wr_1m}
       \end{subfigure}
-      \caption{Temporally interpolated samples generated via our learnt-transformation model. Figure \ref{fig:interpolate_sample_real} depicts the observed sample in UKCP18, with the hourly snapshots conditioned on highlighted in red. The three subsequent figures depict samples generated with different reconstruction-guidance weights; captions below each figure indicate the reconstruction-guidance weight $w_r$. Ideally, each hourly snapshot should be identical, or very similar, to the corresponding true snapshot in Figure \ref{fig:interpolate_sample_real}. The format of each hourly snapshot is the same as Figure \ref{fig:no_transform_sample}.}
+      \caption{Temporally interpolated samples generated via our learnt-transformation model. Figure \ref{fig:interpolate_sample_real} depicts the observed sample in UKCP18, with the hourly snapshots conditioned on highlighted in red. The three subsequent figures depict interpolated samples generated with different reconstruction-guidance weights; captions below each figure indicate the reconstruction-guidance weight $w_r$. Ideally, each hourly snapshot should be identical, or very similar, to the corresponding true snapshot in Figure \ref{fig:interpolate_sample_real}. The format of each hourly snapshot is the same as Figure \ref{fig:no_transform_sample}.}
       \label{fig:interpolate_sample}
 \end{figure}
 
@@ -1415,6 +1447,60 @@ In summary, this section establishes the potential for generating interpolated s
 \label{sec:results_nowcasting}
 
 Following the successful application of reconstruction-guided sampling for temporal interpolation, as demonstrated in the previous section, we extend our study to its potential applicability for nowcasting. This section presents preliminary proof-of-principle results for using a diffusion model to generate nowcasts.
+
+As demonstrated by Figure \ref{fig:nowcast_histogram} and Figure \ref{fig:nowcast_qq}, the distribution of individual intensities in the conditionally generated nowcasts resembles the distribution of the corresponding withheld samples from the test set. The similar distribution suggests that the nowcasts broadly contain the correct amount of precipitation. However, there are notable discrepancies. Specifically, the nowcasts underrepresent precipitation less intense than 10 millimetres per hour and overrepresent more intense precipitation. Interestingly, the discrepancies appear to be accentuated versions of those observed in the interpolated samples generated with an identical reconstruction-guidance weighting of $w_r=10^6$. This similarity suggests that developing techniques to address the discrepancies in the interpolated samples may also apply to the nowcasts and vice versa.
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=\linewidth]{nowcast_histogram.png}
+      \caption{Distribution of individual precipitation rates in the conditionally generated nowcasts produced by our learnt-transformation model, and the observed distribution of the corresponding withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_histogram}.}
+      \label{fig:nowcast_histogram}
+\end{figure}
+
+\begin{figure}[htbp]
+      \centering
+      \includegraphics[width=\textwidth]{nowcast_qq.png}
+      \caption{QQ plot comparing the distribution of individual precipitation rates in the conditionally generated nowcasts produced by our learnt-transformation model against the corresponding observed withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_qq}.}
+      \label{fig:nowcast_qq}
+\end{figure}
+
+Figure \ref{fig:nowcast_psd} depicts PSD graphs for the spatial and temporal dimensions of the nowcasts and the corresponding withheld samples from the test set. As evident from the spatial PSD graph in Figure \ref{fig:nowcast_psd_spatial}, the nowcasts exhibit similar spatial characteristics to their corresponding withheld samples from the test set. The similarity is better at more minor spatial scales; at the most minute spatial scale, the difference in power is negligible. At all scales, the discrepancy between the nowcasts and the withheld samples is less pronounced than the discrepancy between the unconditionally generated samples and the test set. The consistently lesser discrepancy reaffirms our earlier observation that an adequate reconstruction-guidance weight enables the same unconditional model to generate samples conditionally that partially overcome the model's inherent limitations in the unconditional setting. 
+
+\begin{figure}[htbp]
+      \centering
+      \begin{subfigure}{.47\textwidth}
+            \includegraphics[width=\linewidth]{nowcast_psd_spatial.png}
+            \caption{Spatial Dimensions}
+            \label{fig:nowcast_psd_spatial}
+      \end{subfigure}
+      \begin{subfigure}{.51\textwidth}
+            \includegraphics[width=\linewidth]{nowcast_psd_temporal.png}
+            \caption{Temporal Dimension}
+            \label{fig:nowcast_psd_temporal}
+      \end{subfigure}
+      \caption{PSD graphs for conditionally generated nowcasts produced via our learnt-transformation model against the corresponding observed withheld samples from 12 seasons in our test set. The format is the same as Figure \ref{fig:no_transform_psd}.}
+      \label{fig:nowcast_psd}
+\end{figure}
+
+Figure \ref{fig:nowcast_sample} presents a nowcast sample generated by our model, which showcases the model's proficiency in several aspects. In particular, the model demonstrates its merit in accurately capturing the easterly movement of the precipitation band, as evidenced by the alignment of the predicted and actual precipitation patterns. Moreover, the model exhibits its ability to capture the correct movement of the precipitation band. For instance, in the final snapshot provided to the model, the precipitation band is just entering the South West of England. Remarkably, the nowcast reveals that the model has adeptly captured the band's progress, extending as far as Exteter four hours later. The model has also successfully identified the relative immobility of the most easterly part of the precipitation band. In the final snapshot provided to the model, the most easterly segment of the band has a longitude of approximately 1.5 degrees west. In both the nowcast five hours later and the corresponding observed snapshot, the most easterly segment of the band similarly has a longitude of approximately 1.5 degrees west.
+
+\begin{figure}[htbp]
+      \centering
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{nowcast_sample_real.png}
+            \caption{Observed Sample in UKCP18}
+            \label{fig:nowcast_sample_real}
+      \end{subfigure}
+      \begin{subfigure}{\textwidth}
+            \includegraphics[width=\linewidth]{nowcast_sample_predict.png}
+            \caption{Generated nowcast with $w_r=0$}
+            \label{fig:nowcast_sample_predict}
+      \end{subfigure}
+      \caption{Nowcast sample generated via our learnt-transformation model. Figure \ref{fig:nowcast_sample_real} depicts an observed sample in UKCP18, with the hourly samples conditioned on in the subsequent nowcast highlighted in red. Figure \ref{fig:nowcast_sample_predict} depicts the corresponding nowcast. Ideally, each hourly snapshot in the nowcast should resemble the corresponding observed snapshot. The format of each hourly snapshot is the same as Figure \ref{fig:no_transform_sample}.}
+      \label{fig:nowcast_sample}
+\end{figure}
+
+In summary, this section establishes a proof-of-principle for the ability of diffusion models to generate nowcasts. We leave the development of techniques to address the discrepancies observed in the nowcasts and a more comprehensive analysis for future work.
 
 % \section{Autoregressive Generation of Longer Sequences}
 
@@ -1428,6 +1514,10 @@ Following the successful application of reconstruction-guided sampling for tempo
 
 \chapter{Conclusion}
 \label{chap:conclusion}
+
+\section{Main Contributions}
+
+\section{Future Work}
 
 % =============================================================================
 
@@ -1461,64 +1551,7 @@ Following the successful application of reconstruction-guided sampling for tempo
 % the same as chapters in a sense, but once signaled as being appendicies via
 % the associated macro, LaTeX manages them appropriatly.
 
-\appendix
-
-\chapter{Diffusion Models}
-\label{appx:diffusion}
-
-\section{$\mathbf{v}$-Prediction Parameterisation}
-\label{appx:diffusion_v_prediction_parameterisation}
-
-From Equation \ref{eq:z_t}, for a given datapoint $\mathbf{x}\sim q(\mathbf{x})$, we can sample latent variable $\mathbf{z}_t\sim q(\mathbf{z}_t|\mathbf{x})$ via:
-\begin{align}
-      \mathbf{z}_t=\alpha_t\mathbf{x}+\sigma_t\boldsymbol\epsilon
-\end{align}
-where $\boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},\mathbf{I})$ is multivariate standard Gaussian noise. We define the velocity of $\mathbf{z}_t$ as
-\begin{align}
-      \mathbf{v}_t=\frac{d\mathbf{z}_t}{d \psi}
-\end{align}
-i.e. the derivative of $\mathbf{z}_t$ with respect to $\psi$, which itself is:
-\begin{align}
-      \psi_t&=\arctan\left(\frac{\sigma_t}{\alpha_t}\right)\\
-      &=\arctan\left(\frac{\sin\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)}{\cos\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)}
-      \right)\\
-      &=\arctan\left(\tan\left(\frac{\pi}{2}(t_0+t(t_1-t_0))\right)\right)\\
-      &=\frac{\pi}{2}(t_0+t(t_1-t_0))
-\end{align}
-when using the truncated continuous-time $\alpha$-cosine noise schedule as per Section \ref{sec:background_diffusion_noise_schedule}. As such, we can formulate the velocity as:
-\begin{align}
-      \mathbf{v}_t=\frac{\mathbf{z}_t}{d\psi}&=\frac{d\cos(\psi)}{d\psi}\mathbf{x}+\frac{d\sin(\psi)}{d\psi}\boldsymbol\epsilon\\
-      &=-\sin(\psi)\mathbf{x}+\cos(\psi)\boldsymbol\epsilon\\
-      &=\alpha_t\boldsymbol\epsilon-\sigma_t\mathbf{x}\label{eq:v_t_equals_alpha_t_epsilon_minus_sigma_t_x}
-\end{align}
-We can rearrange the above to derive a form for $\mathbf{x}$ in terms of $\mathbf{z}_t$ and $\mathbf{v}_t$ as follows:
-\begin{align}
-      \mathbf{v}_t&=-\sin(\psi)\mathbf{x}+\cos(\psi)\boldsymbol\epsilon\\
-      \sin(\psi)\mathbf{x}&=\cos(\psi)\boldsymbol\epsilon-\mathbf{v}_t\\
-      &=\cos(\psi)\left(\frac{\mathbf{z}_t-\cos(\psi)\mathbf{x}}{\sin(\psi)}\right)-\mathbf{v}_t\\
-      \sin^2(\psi)\mathbf{x}&=\cos(\psi)\mathbf{z}_t-\cos^2(\psi)\mathbf{x}-\sin(\psi)\mathbf{v}_t\\
-      \sin^2(\psi)\mathbf{x}+\cos^2(\psi)\mathbf{x}&=\cos(\psi)\mathbf{z}_t-\sin(\psi)\mathbf{v}_t\\
-      (\sin^2(\psi)+\cos^2(\psi))\mathbf{x}&=\cos(\psi)\mathbf{z}_t-\sin(\psi)\mathbf{v}_t\\
-      \mathbf{x}&=\cos(\psi)\mathbf{z}_t-\sin(\psi)\mathbf{v}_t\\
-      &=\alpha_t\mathbf{z}_t-\sigma_t\mathbf{v}_t
-\end{align}
-As per Equation \ref{eq:v_t_equals_alpha_t_epsilon_minus_sigma_t_x}, during training we can 
-
-
-
-We define the velocity of $\mathbf{z}_t$ as 
-
-We rearrange to get:
-
-As such:
-\begin{align}
-      \mathbf{x}=\alpha_t\mathbf{z}_t-\sigma_t\mathbf{v}_t
-\end{align}
-
-During training, we train the model to minimise:
-\begin{align}
-      \mathbb{E}_{\mathbf{x},\boldsymbol\epsilon, t}\left[\Vert\mathbf{v}_t-\hat{\mathbf{v}}_\theta(\mathbf{z}_t, \lambda_t)\Vert_2^2\right]
-\end{align}
+% \appendix
 
 % =============================================================================
 
